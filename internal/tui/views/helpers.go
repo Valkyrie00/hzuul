@@ -1,0 +1,31 @@
+package views
+
+import (
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+func setTableHeader(table *tview.Table, columns ...string) {
+	for i, col := range columns {
+		cell := tview.NewTableCell(col).
+			SetTextColor(tcell.NewRGBColor(56, 132, 244)).
+			SetSelectable(false).
+			SetAttributes(tcell.AttrBold)
+		table.SetCell(0, i, cell)
+	}
+}
+
+func resultCell(result string) *tview.TableCell {
+	var color tcell.Color
+	switch result {
+	case "SUCCESS":
+		color = tcell.NewRGBColor(72, 199, 142)
+	case "FAILURE", "ERROR", "RETRY_LIMIT":
+		color = tcell.NewRGBColor(235, 87, 87)
+	case "LOST", "ABORTED", "TIMED_OUT", "DISK_FULL":
+		color = tcell.NewRGBColor(242, 201, 76)
+	default:
+		color = tcell.NewRGBColor(56, 132, 244)
+	}
+	return tview.NewTableCell(result).SetTextColor(color)
+}
