@@ -23,21 +23,42 @@ type BuildLogView struct {
 }
 
 func NewBuildLogView(app *tview.Application) *BuildLogView {
+	bg := tcell.NewRGBColor(24, 24, 32)
+	dimColor := tcell.NewRGBColor(50, 50, 65)
+
 	header := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	header.SetBackgroundColor(tcell.NewRGBColor(32, 32, 44))
+	header.SetBackgroundColor(bg)
+	header.SetBorderPadding(0, 0, 2, 0)
+
+	separator := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	separator.SetBackgroundColor(bg)
+	separator.SetTextColor(dimColor)
+	fmt.Fprint(separator, "  ──────────────────────────────────────")
 
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
 		SetChangedFunc(func() { app.Draw() })
-	textView.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	textView.SetBackgroundColor(bg)
+	textView.SetBorderPadding(0, 0, 2, 2)
+
+	navBg := tcell.NewRGBColor(32, 32, 44)
+	keys := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	keys.SetBackgroundColor(navBg)
+	fmt.Fprint(keys, " [blue]q[-][::d]:back[-]  [blue]o[-][::d]:open url[-]  [blue]↑↓[-][::d]:scroll[-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
-		AddItem(textView, 0, 1, true)
-	root.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+		AddItem(separator, 1, 0, false).
+		AddItem(textView, 0, 1, true).
+		AddItem(keys, 1, 0, false)
+	root.SetBackgroundColor(bg)
 
 	return &BuildLogView{
 		root:     root,
