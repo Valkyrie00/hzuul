@@ -19,6 +19,10 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	table.SetSelectedStyle(tcell.StyleDefault.
+		Background(tcell.NewRGBColor(30, 30, 42)).
+		Foreground(tcell.ColorWhite).
+		Attributes(tcell.AttrBold))
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true)
@@ -30,27 +34,26 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 func (v *AutoholdsView) Root() tview.Primitive { return v.root }
 
 func (v *AutoholdsView) Load(client *api.Client) {
-	v.table.Clear()
-	setTableHeader(v.table, "ID", "Project", "Job", "Count", "Reason")
-
 	go func() {
 		holds, err := client.GetAutoholds()
 		v.app.QueueUpdateDraw(func() {
+			v.table.Clear()
+			setTableHeader(v.table, "ID", "Project", "Job", "Count", "Reason")
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf("[red]Error: %v[-]", err)))
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			if len(holds) == 0 {
-				v.table.SetCell(1, 0, tview.NewTableCell("[::d]No autoholds[-]").SetSelectable(false))
+				v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No autoholds[-]").SetSelectable(false))
 				return
 			}
 			for i, h := range holds {
 				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(h.ID).SetTextColor(tcell.ColorWhite))
-				v.table.SetCell(row, 1, tview.NewTableCell(h.Project).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 2, tview.NewTableCell(h.Job).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf("%d/%d", h.CurrentCount, h.MaxCount)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
-				v.table.SetCell(row, 4, tview.NewTableCell(h.Reason).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 0, tview.NewTableCell(" "+h.ID).SetTextColor(tcell.ColorWhite))
+				v.table.SetCell(row, 1, tview.NewTableCell(" "+h.Project).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 2, tview.NewTableCell(" "+h.Job).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf(" %d/%d", h.CurrentCount, h.MaxCount)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
+				v.table.SetCell(row, 4, tview.NewTableCell(" "+h.Reason).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
 			}
 		})
 	}()

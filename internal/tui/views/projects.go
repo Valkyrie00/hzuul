@@ -19,6 +19,10 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	table.SetSelectedStyle(tcell.StyleDefault.
+		Background(tcell.NewRGBColor(30, 30, 42)).
+		Foreground(tcell.ColorWhite).
+		Attributes(tcell.AttrBold))
 	table.SetBorder(false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -31,21 +35,20 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 func (v *ProjectsView) Root() tview.Primitive { return v.root }
 
 func (v *ProjectsView) Load(client *api.Client) {
-	v.table.Clear()
-	setTableHeader(v.table, "Name", "Type", "Connection")
-
 	go func() {
 		projects, err := client.GetProjects()
 		v.app.QueueUpdateDraw(func() {
+			v.table.Clear()
+			setTableHeader(v.table, "Name", "Type", "Connection")
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf("[red]Error: %v[-]", err)))
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			for i, p := range projects {
 				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(p.Name).SetTextColor(tcell.ColorWhite))
-				v.table.SetCell(row, 1, tview.NewTableCell(p.Type).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 2, tview.NewTableCell(p.ConnectionName).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 0, tview.NewTableCell(" "+p.Name).SetTextColor(tcell.ColorWhite))
+				v.table.SetCell(row, 1, tview.NewTableCell(" "+p.Type).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 2, tview.NewTableCell(" "+p.ConnectionName).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
 			}
 		})
 	}()

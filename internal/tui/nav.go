@@ -42,15 +42,16 @@ func NewNavBar(onTab func(int)) *NavBar {
 
 func (n *NavBar) render() {
 	n.Clear()
+	fmt.Fprint(n, " ")
 	for i, name := range tabNames {
 		if i > 0 {
-			fmt.Fprint(n, " ")
+			fmt.Fprint(n, "  ")
 		}
 		shortcut := fmt.Sprintf("%d", i+1)
 		if i == n.active {
-			fmt.Fprintf(n, "[black:blue:b] %s·%s [-:-:-]", shortcut, name)
+			fmt.Fprintf(n, "[#DCDCE6::b]%s·%s[-::-]", shortcut, name)
 		} else {
-			fmt.Fprintf(n, "[white:-:-] %s·%s [-:-:-]", shortcut, name)
+			fmt.Fprintf(n, "[#3884F4]%s[-][#78788C]·%s[-]", shortcut, name)
 		}
 	}
 }

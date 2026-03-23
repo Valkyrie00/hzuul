@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +49,8 @@ func NewStatusView(app *tview.Application) *StatusView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(bg)
+	table.SetSelectedStyle(tcell.StyleDefault.
+		Background(tcell.NewRGBColor(38, 38, 50)))
 
 	logView := NewBuildLogView(app)
 
@@ -82,14 +86,26 @@ func NewStatusView(app *tview.Application) *StatusView {
 				v.table.Select(sel, 0)
 			}
 		case "job":
-			v.showJobDetail(entry)
+			sr := v.rows[entry.rowIdx]
+			job := sr.item.Jobs[entry.jobIdx]
+			if job.Result == nil && job.UUID != "" {
+				v.streamJobLog(sr, job)
+			} else if job.UUID != "" {
+				v.showBuildDetail(sr, job)
+			} else {
+				changeURL := sr.item.ChangeURL()
+				if changeURL != "" {
+					openURL(changeURL)
+				}
+			}
 		}
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		row, _ := table.GetSelection()
+		entry, ok := v.rowMap[row]
+
 		if event.Rune() == 'l' {
-			row, _ := table.GetSelection()
-			entry, ok := v.rowMap[row]
 			if !ok || entry.kind != "job" {
 				return event
 			}
@@ -100,6 +116,22 @@ func NewStatusView(app *tview.Application) *StatusView {
 			}
 			return nil
 		}
+
+		if event.Rune() == 'o' {
+			if !ok {
+				return event
+			}
+			idx := entry.rowIdx
+			if entry.kind == "job" {
+				idx = entry.rowIdx
+			}
+			changeURL := v.rows[idx].item.ChangeURL()
+			if changeURL != "" {
+				openURL(changeURL)
+			}
+			return nil
+		}
+
 		return event
 	})
 
@@ -107,6 +139,10 @@ func NewStatusView(app *tview.Application) *StatusView {
 		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
 			v.logView.Stop()
 			v.pages.SwitchToPage("table")
+			return nil
+		}
+		if event.Rune() == 'o' && v.logView.openURL != "" {
+			openURL(v.logView.openURL)
 			return nil
 		}
 		return event
@@ -119,21 +155,32 @@ func (v *StatusView) Root() tview.Primitive { return v.root }
 
 func (v *StatusView) Load(client *api.Client) {
 	v.client = client
-	v.table.Clear()
-	v.setStatusHeader()
-	v.rows = nil
-	v.rowMap = make(map[int]rowEntry)
 
 	go func() {
 		status, err := client.GetStatus()
 		v.app.QueueUpdateDraw(func() {
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf("[red]Error: %v[-]", err)).SetExpansion(1))
+				v.table.Clear()
+				v.setStatusHeader()
+				v.rows = nil
+				v.rowMap = make(map[int]rowEntry)
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetExpansion(1))
 				return
 			}
+
+			sel, _ := v.table.GetSelection()
+
 			v.status = status
 			v.collectRows(status)
 			v.rebuildTable()
+
+			if sel >= v.table.GetRowCount() {
+				sel = 1
+			}
+			if sel < 1 {
+				sel = 1
+			}
+			v.table.Select(sel, 0)
 		})
 	}()
 }
@@ -155,23 +202,22 @@ func (v *StatusView) collectRows(status *api.Status) {
 	}
 }
 
-const statusCols = 7
+const statusCols = 6
 
 func (v *StatusView) setStatusHeader() {
 	headers := []struct {
 		name      string
 		expansion int
 	}{
-		{"Project", 2},
+		{"Project", 1},
 		{"Change", 0},
 		{"Owner", 0},
 		{"Progress", 0},
 		{"Elapsed", 0},
-		{"ETA", 0},
 		{"Jobs", 1},
 	}
 	for i, h := range headers {
-		cell := tview.NewTableCell(h.name).
+		cell := tview.NewTableCell(" " + h.name).
 			SetTextColor(tcell.NewRGBColor(56, 132, 244)).
 			SetSelectable(false).
 			SetAttributes(tcell.AttrBold).
@@ -188,11 +234,10 @@ func (v *StatusView) rebuildTable() {
 	sectionBg := tcell.NewRGBColor(30, 30, 42)
 	jobBg := tcell.NewRGBColor(28, 28, 38)
 	muted := tcell.NewRGBColor(120, 120, 140)
-	accent := tcell.NewRGBColor(56, 132, 244)
+	sectionColor := tcell.NewRGBColor(230, 185, 90)
 	now := time.Now()
-	tableRow := 1
+	tableRow := 1 // row 0 is header
 
-	// Group rows by pipeline for section headers
 	type pipelineGroup struct {
 		name  string
 		start int
@@ -207,19 +252,34 @@ func (v *StatusView) rebuildTable() {
 		}
 	}
 
-	for _, g := range groups {
-		// Pipeline section header
-		headerText := fmt.Sprintf("▸ %s (%d)", g.name, g.count)
+	for gi, g := range groups {
+		// Spacer row between pipeline sections
+		if gi > 0 {
+			for col := 0; col < statusCols; col++ {
+				exp := 0
+				if col == 0 {
+				exp = 1
+			} else if col == statusCols-1 {
+					exp = 1
+				}
+				v.table.SetCell(tableRow, col,
+					tview.NewTableCell("").SetExpansion(exp))
+			}
+			tableRow++
+		}
+
+		// Pipeline section header with ── decoration
+		headerText := fmt.Sprintf(" ── %s (%d) ", g.name, g.count)
 		v.table.SetCell(tableRow, 0, tview.NewTableCell(headerText).
-			SetTextColor(accent).SetAttributes(tcell.AttrBold).
-			SetSelectable(false).SetBackgroundColor(sectionBg).SetExpansion(2))
+			SetTextColor(sectionColor).SetAttributes(tcell.AttrBold).
+			SetBackgroundColor(sectionBg).SetExpansion(1).SetMaxWidth(45))
 		for col := 1; col < statusCols; col++ {
 			exp := 0
 			if col == statusCols-1 {
 				exp = 1
 			}
 			v.table.SetCell(tableRow, col,
-				tview.NewTableCell("").SetSelectable(false).SetBackgroundColor(sectionBg).SetExpansion(exp))
+				tview.NewTableCell("").SetBackgroundColor(sectionBg).SetExpansion(exp))
 		}
 		tableRow++
 
@@ -232,7 +292,6 @@ func (v *StatusView) rebuildTable() {
 			bar := compactProgress(running, success, failure, other, total)
 			summary := jobSummaryText(running, success, failure, other)
 			elapsed := formatElapsed(sr.item.EnqueueTime, now)
-			eta := formatRemaining(sr.item.RemainingTime)
 
 			project := sr.item.ProjectName()
 			if project == "" {
@@ -246,13 +305,16 @@ func (v *StatusView) rebuildTable() {
 				arrow = "▾"
 			}
 
-			v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf(" %s %s", arrow, project)).SetTextColor(tcell.ColorWhite).SetExpansion(2))
-			v.table.SetCell(tableRow, 1, tview.NewTableCell("#"+changeID).SetTextColor(muted).SetExpansion(0))
-			v.table.SetCell(tableRow, 2, tview.NewTableCell(owner).SetTextColor(tcell.NewRGBColor(180, 160, 220)).SetExpansion(0))
-			v.table.SetCell(tableRow, 3, tview.NewTableCell(bar).SetExpansion(0))
-			v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed).SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
-			v.table.SetCell(tableRow, 5, tview.NewTableCell(eta).SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
-			v.table.SetCell(tableRow, 6, tview.NewTableCell(summary).SetTextColor(muted).SetExpansion(1))
+			v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf(" %s %s", arrow, project)).SetTextColor(tcell.ColorWhite).SetExpansion(1))
+			displayID := changeID
+			if len(displayID) > 12 {
+				displayID = displayID[:8]
+			}
+			v.table.SetCell(tableRow, 1, tview.NewTableCell(" #"+displayID).SetTextColor(muted).SetExpansion(0))
+			v.table.SetCell(tableRow, 2, tview.NewTableCell(" "+owner).SetTextColor(tcell.NewRGBColor(180, 160, 220)).SetExpansion(0))
+			v.table.SetCell(tableRow, 3, tview.NewTableCell(" "+bar).SetExpansion(0))
+			v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
+			v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+summary).SetTextColor(muted).SetExpansion(1))
 			tableRow++
 
 			if v.expanded[i] {
@@ -263,20 +325,20 @@ func (v *StatusView) rebuildTable() {
 					if job.Result != nil {
 						result = *job.Result
 					}
-					icon := jobIcon(result)
-					timeStr := jobTimeInfo(job, now)
+					nameColor := jobNameColor(result)
 					nv := ""
 					if !job.Voting {
-						nv = " [::d](nv)[-]"
+						nv = " (nv)"
 					}
-					jobText := fmt.Sprintf("      %s %s%s%s", icon, job.Name, nv, timeStr)
+					jobElapsed, _ := jobTimeParts(job, now)
 					resultText := jobResultText(result)
 
-					v.table.SetCell(tableRow, 0, tview.NewTableCell(jobText).SetTextColor(tcell.ColorWhite).SetExpansion(2).SetBackgroundColor(jobBg))
-					for col := 1; col < statusCols-1; col++ {
-						v.table.SetCell(tableRow, col, tview.NewTableCell("").SetExpansion(0).SetBackgroundColor(jobBg))
-					}
-					v.table.SetCell(tableRow, statusCols-1, tview.NewTableCell(resultText).SetExpansion(1).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 0, tview.NewTableCell("       "+job.Name+nv).SetTextColor(nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 1, tview.NewTableCell("").SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 2, tview.NewTableCell("").SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 4, tview.NewTableCell(jobElapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+resultText).SetExpansion(1).SetBackgroundColor(jobBg))
 					tableRow++
 				}
 			}
@@ -284,72 +346,14 @@ func (v *StatusView) rebuildTable() {
 	}
 
 	if len(v.rows) == 0 {
-		v.table.SetCell(tableRow, 0, tview.NewTableCell("[::d]All pipelines idle[-]").SetExpansion(1))
+		v.table.SetCell(tableRow, 0, tview.NewTableCell(" [::d]All pipelines idle[-]").SetExpansion(1))
 	}
 }
 
-func (v *StatusView) showJobDetail(entry rowEntry) {
-	sr := v.rows[entry.rowIdx]
-	job := sr.item.Jobs[entry.jobIdx]
-	now := time.Now()
-
-	result := "running"
-	if job.Result != nil {
-		result = *job.Result
-	}
-
-	text := tview.NewTextView().
-		SetDynamicColors(true).
-		SetScrollable(true)
-	text.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
-	text.SetBorder(true).
-		SetTitle(fmt.Sprintf(" %s ", job.Name)).
-		SetBorderColor(tcell.NewRGBColor(60, 60, 80))
-
-	fmt.Fprintf(text, "[bold]Job:[-]       %s\n", job.Name)
-	fmt.Fprintf(text, "[bold]Result:[-]    %s\n", jobResultText(result))
-	fmt.Fprintf(text, "[bold]Pipeline:[-]  %s\n", sr.pipeline)
-	fmt.Fprintf(text, "[bold]Project:[-]   %s\n", sr.item.ProjectName())
-	fmt.Fprintf(text, "[bold]Change:[-]    #%s\n", sr.item.ChangeID())
-	if job.UUID != "" {
-		fmt.Fprintf(text, "[bold]UUID:[-]      %s\n", job.UUID)
-	}
-	if !job.Voting {
-		fmt.Fprintf(text, "[bold]Voting:[-]    [yellow]non-voting[-]\n")
-	}
-	elapsed := jobTimeInfo(job, now)
-	if elapsed != "" {
-		fmt.Fprintf(text, "[bold]Time:[-]      %s\n", strings.TrimSpace(elapsed))
-	}
-	if job.ReportURL != "" {
-		fmt.Fprintf(text, "[bold]Report:[-]    %s\n", job.ReportURL)
-	}
-
-	fmt.Fprintln(text)
-	if job.UUID != "" {
-		fmt.Fprintln(text, "[::d]Press l to stream log, q/Esc to close[-]")
-	} else {
-		fmt.Fprintln(text, "[::d]Press q/Esc to close[-]")
-	}
-
-	text.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'l' && job.UUID != "" && v.client != nil {
-			v.pages.RemovePage("jobdetail")
-			v.streamJobLog(sr, job)
-			return nil
-		}
-		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-			v.pages.RemovePage("jobdetail")
-			return nil
-		}
-		return event
-	})
-
-	v.pages.AddAndSwitchToPage("jobdetail", center(text, 70, 18), true)
-}
 
 func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 	v.logView.Stop()
+	v.logView.openURL = job.ReportURL
 
 	v.logView.header.Clear()
 	project := sr.item.ProjectName()
@@ -450,6 +454,39 @@ func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 	}()
 }
 
+func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
+	v.logView.Stop()
+	v.logView.header.Clear()
+	project := sr.item.ProjectName()
+	if project == "" {
+		project = sr.queue
+	}
+	fmt.Fprintf(v.logView.header, " [bold]Build Detail[-] │ [blue]%s[-] │ %s │ #%s",
+		job.Name, project, sr.item.ChangeID())
+
+	v.logView.textView.Clear()
+	fmt.Fprintln(v.logView.textView, "[::d]Loading build detail...[-]")
+	v.pages.SwitchToPage("log")
+
+	go func() {
+		build, err := v.client.GetBuild(job.UUID)
+		v.app.QueueUpdateDraw(func() {
+			if err != nil {
+				v.logView.textView.Clear()
+				fmt.Fprintf(v.logView.textView, "[red]Error loading build: %v[-]\n\n", err)
+				fmt.Fprintf(v.logView.textView, "[bold]Job:[-]       %s\n", job.Name)
+				fmt.Fprintf(v.logView.textView, "[bold]Pipeline:[-]  %s\n", sr.pipeline)
+				fmt.Fprintf(v.logView.textView, "[bold]Change:[-]    #%s\n", sr.item.ChangeID())
+				if job.ReportURL != "" {
+					fmt.Fprintf(v.logView.textView, "\n[::d]Report: %s[-]\n", job.ReportURL)
+				}
+				return
+			}
+			v.logView.ShowStaticLog(build)
+		})
+	}()
+}
+
 func jobResultText(result string) string {
 	switch result {
 	case "SUCCESS":
@@ -485,16 +522,6 @@ func parseJobStreamURL(job api.JobStatus) (uuid, logfile string) {
 	return
 }
 
-// center wraps a primitive in a centered flex layout (used for popups).
-func center(p tview.Primitive, width, height int) tview.Primitive {
-	return tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(p, height, 0, true).
-			AddItem(nil, 0, 1, false), width, 0, true).
-		AddItem(nil, 0, 1, false)
-}
 
 func jobCounts(jobs []api.JobStatus) (running, success, failure, other int) {
 	for _, j := range jobs {
@@ -526,7 +553,7 @@ func compactProgress(running, success, failure, other, total int) string {
 	}{
 		{success, "[green]"},
 		{failure, "[red]"},
-		{running, "[blue]"},
+		{running, "[#50A0FF]"},
 		{other, "[yellow]"},
 	}
 	filled := 0
@@ -566,19 +593,47 @@ func jobSummaryText(running, success, failure, other int) string {
 	return strings.Join(parts, " / ")
 }
 
-func jobIcon(result string) string {
+func jobNameColor(result string) tcell.Color {
 	switch result {
 	case "SUCCESS":
-		return "[green]\u2714[-]"
+		return tcell.ColorGreen
 	case "FAILURE", "ERROR", "RETRY_LIMIT":
-		return "[red]\u2718[-]"
+		return tcell.ColorRed
 	case "LOST", "ABORTED", "DISK_FULL", "TIMED_OUT":
-		return "[yellow]\u26a0[-]"
+		return tcell.ColorYellow
 	case "running":
-		return "[blue]\u25cf[-]"
+		return tcell.NewRGBColor(80, 160, 255)
 	default:
-		return "[gray]\u25cb[-]"
+		return tcell.NewRGBColor(120, 120, 140)
 	}
+}
+
+func jobTimeParts(job api.JobStatus, now time.Time) (elapsed, eta string) {
+	if s := job.ElapsedTime.String(); s != "" && s != "0" {
+		var ms float64
+		if _, err := fmt.Sscanf(s, "%f", &ms); err == nil && ms > 0 {
+			elapsed = formatDuration(time.Duration(int64(ms)) * time.Millisecond)
+		}
+	} else if s := job.StartTime.String(); s != "" && s != "0" {
+		var sec float64
+		if _, err := fmt.Sscanf(s, "%f", &sec); err == nil && sec > 0 {
+			t := time.Unix(int64(sec), 0)
+			d := now.Sub(t)
+			if d > 0 {
+				elapsed = formatDuration(d)
+			}
+		}
+	}
+
+	if job.Result == nil {
+		if s := job.RemainingTime.String(); s != "" && s != "0" {
+			var ms float64
+			if _, err := fmt.Sscanf(s, "%f", &ms); err == nil && ms > 0 {
+				eta = formatDuration(time.Duration(int64(ms)) * time.Millisecond)
+			}
+		}
+	}
+	return elapsed, eta
 }
 
 func formatElapsed(enqueueTime interface{ String() string }, now time.Time) string {
@@ -598,17 +653,6 @@ func formatElapsed(enqueueTime interface{ String() string }, now time.Time) stri
 	return formatDuration(d)
 }
 
-func formatRemaining(remainingTime interface{ String() string }) string {
-	s := remainingTime.String()
-	if s == "" || s == "0" || s == "null" {
-		return "-"
-	}
-	var ms float64
-	if _, err := fmt.Sscanf(s, "%f", &ms); err != nil || ms <= 0 {
-		return "-"
-	}
-	return formatDuration(time.Duration(int64(ms)) * time.Millisecond)
-}
 
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
@@ -622,35 +666,18 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", m)
 }
 
-func jobTimeInfo(job api.JobStatus, now time.Time) string {
-	if job.Result != nil {
-		elapsed := job.ElapsedTime.String()
-		if elapsed != "" && elapsed != "0" {
-			var ms float64
-			if _, err := fmt.Sscanf(elapsed, "%f", &ms); err == nil && ms > 0 {
-				return fmt.Sprintf(" [::d]%s[-]", formatDuration(time.Duration(int64(ms))*time.Millisecond))
-			}
-		}
-		return ""
+
+func openURL(u string) {
+	var cmd string
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+	case "windows":
+		cmd, args = "cmd", []string{"/c", "start"}
+	default:
+		cmd = "xdg-open"
 	}
-	s := job.StartTime.String()
-	if s == "" || s == "0" {
-		return ""
-	}
-	var ms float64
-	if _, err := fmt.Sscanf(s, "%f", &ms); err != nil || ms == 0 {
-		return ""
-	}
-	d := now.Sub(time.UnixMilli(int64(ms)))
-	if d < 0 {
-		return ""
-	}
-	rem := job.RemainingTime.String()
-	if rem != "" && rem != "0" {
-		var rms float64
-		if _, err := fmt.Sscanf(rem, "%f", &rms); err == nil && rms > 0 {
-			return fmt.Sprintf(" [::d]%s (ETA %s)[-]", formatDuration(d), formatDuration(time.Duration(int64(rms))*time.Millisecond))
-		}
-	}
-	return fmt.Sprintf(" [::d]%s[-]", formatDuration(d))
+	args = append(args, u)
+	exec.Command(cmd, args...).Start()
 }

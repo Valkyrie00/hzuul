@@ -5,10 +5,17 @@ import (
 	"github.com/rivo/tview"
 )
 
+var (
+	colorTableHeader = tcell.NewRGBColor(56, 132, 244)
+	colorSeparator   = tcell.NewRGBColor(50, 50, 65)
+)
+
+// setTableHeader writes a bold blue header row (row 0).
+// Data rows should start at row 1. Use SetFixed(1, 0).
 func setTableHeader(table *tview.Table, columns ...string) {
 	for i, col := range columns {
-		cell := tview.NewTableCell(col).
-			SetTextColor(tcell.NewRGBColor(56, 132, 244)).
+		cell := tview.NewTableCell(" " + col).
+			SetTextColor(colorTableHeader).
 			SetSelectable(false).
 			SetAttributes(tcell.AttrBold)
 		table.SetCell(0, i, cell)
@@ -27,5 +34,5 @@ func resultCell(result string) *tview.TableCell {
 	default:
 		color = tcell.NewRGBColor(56, 132, 244)
 	}
-	return tview.NewTableCell(result).SetTextColor(color)
+	return tview.NewTableCell(" " + result).SetTextColor(color)
 }

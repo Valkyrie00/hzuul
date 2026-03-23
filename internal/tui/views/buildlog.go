@@ -19,6 +19,7 @@ type BuildLogView struct {
 	streamer *api.LogStreamer
 	mu       sync.Mutex
 	stopCh   chan struct{}
+	openURL  string
 }
 
 func NewBuildLogView(app *tview.Application) *BuildLogView {
@@ -52,6 +53,7 @@ func (v *BuildLogView) Load(_ *api.Client) {}
 
 func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.Stop()
+	v.openURL = build.LogURL
 
 	v.header.Clear()
 	fmt.Fprintf(v.header, " [bold]Log[-] │ [blue]%s[-] │ %s │ %s",
@@ -137,6 +139,7 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 
 func (v *BuildLogView) ShowStaticLog(build *api.Build) {
 	v.Stop()
+	v.openURL = build.LogURL
 	v.header.Clear()
 	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [blue]%s[-] │ %s │ %s",
 		build.JobName, build.Ref.Project, build.Ref.Branch)
@@ -146,12 +149,12 @@ func (v *BuildLogView) ShowStaticLog(build *api.Build) {
 	fmt.Fprintf(v.textView, "[bold]UUID:[-]      %s\n", build.UUID)
 	fmt.Fprintf(v.textView, "[bold]Project:[-]   %s\n", build.Ref.Project)
 	fmt.Fprintf(v.textView, "[bold]Branch:[-]    %s\n", build.Ref.Branch)
-	fmt.Fprintf(v.textView, "[bold]Change:[-]    %s,%s\n", build.Ref.Change, build.Ref.Patchset)
+	fmt.Fprintf(v.textView, "[bold]Change:[-]    %v,%v\n", build.Ref.Change, build.Ref.Patchset)
 	fmt.Fprintf(v.textView, "[bold]Result:[-]    %s\n", resultTag(build.Result))
-	fmt.Fprintf(v.textView, "[bold]Duration:[-]  %s\n", build.Duration)
+	fmt.Fprintf(v.textView, "[bold]Duration:[-]  %v\n", build.Duration)
 	fmt.Fprintf(v.textView, "[bold]Start:[-]     %s\n", build.StartTime)
 	fmt.Fprintf(v.textView, "[bold]End:[-]       %s\n", build.EndTime)
-	fmt.Fprintf(v.textView, "[bold]Voting:[-]    %s\n", build.Voting)
+	fmt.Fprintf(v.textView, "[bold]Voting:[-]    %v\n", build.Voting)
 	fmt.Fprintf(v.textView, "[bold]Nodeset:[-]   %s\n", build.Nodeset)
 	if build.LogURL != "" {
 		fmt.Fprintf(v.textView, "[bold]Log URL:[-]   %s\n", build.LogURL)

@@ -23,6 +23,10 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	table.SetSelectedStyle(tcell.StyleDefault.
+		Background(tcell.NewRGBColor(30, 30, 42)).
+		Foreground(tcell.ColorWhite).
+		Attributes(tcell.AttrBold))
 
 	logView := NewBuildLogView(app)
 
@@ -43,10 +47,11 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	}
 
 	table.SetSelectedFunc(func(row, _ int) {
-		if row <= 0 || row-1 >= len(v.builds) {
+		idx := row - 1
+		if idx < 0 || idx >= len(v.builds) {
 			return
 		}
-		build := v.builds[row-1]
+		build := v.builds[idx]
 		v.logView.ShowStaticLog(&build)
 		v.pages.SwitchToPage("detail")
 		v.onDetail = true
@@ -55,8 +60,9 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'l' {
 			row, _ := table.GetSelection()
-			if row > 0 && row-1 < len(v.builds) {
-				build := v.builds[row-1]
+			idx := row - 1
+			if idx >= 0 && idx < len(v.builds) {
+				build := v.builds[idx]
 				v.logView.StreamBuild(nil, &build)
 				v.pages.SwitchToPage("detail")
 				v.onDetail = true
@@ -85,26 +91,26 @@ func (v *BuildsView) Load(client *api.Client) {
 	if v.onDetail {
 		return
 	}
-	v.table.Clear()
-	setTableHeader(v.table, "Job", "Project", "Branch", "Pipeline", "Result", "Duration", "Start")
 
 	go func() {
 		builds, err := client.GetBuilds(&api.BuildFilter{Limit: 50})
 		v.app.QueueUpdateDraw(func() {
+			v.table.Clear()
+			setTableHeader(v.table, "Job", "Project", "Branch", "Pipeline", "Result", "Duration", "Start")
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf("[red]Error: %v[-]", err)))
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			v.builds = builds
 			for i, b := range builds {
 				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(b.JobName).SetTextColor(tcell.ColorWhite))
-				v.table.SetCell(row, 1, tview.NewTableCell(b.Ref.Project).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 2, tview.NewTableCell(b.Ref.Branch).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 3, tview.NewTableCell("").SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 0, tview.NewTableCell(" "+b.JobName).SetTextColor(tcell.ColorWhite))
+				v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 3, tview.NewTableCell(" ").SetTextColor(tcell.NewRGBColor(120, 120, 140)))
 				v.table.SetCell(row, 4, resultCell(b.Result))
-				v.table.SetCell(row, 5, tview.NewTableCell(b.Duration).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 6, tview.NewTableCell(b.StartTime).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
+				v.table.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf(" %v", b.Duration)).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 6, tview.NewTableCell(" "+b.StartTime).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
 			}
 		})
 	}()

@@ -3,18 +3,21 @@ package tui
 import "github.com/gdamore/tcell/v2"
 
 var (
-	ColorBg        = tcell.NewRGBColor(24, 24, 32)
-	ColorFg        = tcell.NewRGBColor(220, 220, 230)
-	ColorAccent    = tcell.NewRGBColor(56, 132, 244)
-	ColorSuccess   = tcell.NewRGBColor(72, 199, 142)
-	ColorFailure   = tcell.NewRGBColor(235, 87, 87)
-	ColorWarning   = tcell.NewRGBColor(242, 201, 76)
-	ColorRunning   = tcell.NewRGBColor(56, 132, 244)
-	ColorMuted     = tcell.NewRGBColor(120, 120, 140)
-	ColorNavBg     = tcell.NewRGBColor(32, 32, 44)
-	ColorNavActive = tcell.NewRGBColor(56, 132, 244)
-	ColorHeaderBg  = tcell.NewRGBColor(20, 20, 28)
+	ColorBg          = tcell.NewRGBColor(24, 24, 32)
+	ColorFg          = tcell.NewRGBColor(220, 220, 230)
+	ColorAccent      = tcell.NewRGBColor(56, 132, 244)
+	ColorSuccess     = tcell.NewRGBColor(72, 199, 142)
+	ColorFailure     = tcell.NewRGBColor(235, 87, 87)
+	ColorWarning     = tcell.NewRGBColor(242, 201, 76)
+	ColorRunning     = tcell.NewRGBColor(56, 132, 244)
+	ColorMuted       = tcell.NewRGBColor(120, 120, 140)
+	ColorNavBg       = tcell.NewRGBColor(32, 32, 44)
+	ColorNavActive   = tcell.NewRGBColor(56, 132, 244)
+	ColorHeaderBg    = tcell.NewRGBColor(20, 20, 28)
 	ColorTableHeader = tcell.NewRGBColor(56, 132, 244)
+	ColorBorder      = tcell.NewRGBColor(50, 50, 65)
+	ColorSeparator   = tcell.NewRGBColor(50, 50, 65)
+	ColorSection     = tcell.NewRGBColor(200, 200, 220)
 )
 
 func ResultColor(result string) tcell.Color {

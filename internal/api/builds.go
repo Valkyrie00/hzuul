@@ -6,19 +6,19 @@ import (
 )
 
 type Build struct {
-	ID          string     `json:"_id"`
+	ID          any        `json:"_id"`
 	UUID        string     `json:"uuid"`
 	JobName     string     `json:"job_name"`
 	Result      string     `json:"result"`
 	StartTime   string     `json:"start_time"`
 	EndTime     string     `json:"end_time"`
-	Duration    string     `json:"duration"`
-	Voting      string     `json:"voting"`
+	Duration    any        `json:"duration"`
+	Voting      any        `json:"voting"`
 	LogURL      string     `json:"log_url"`
 	Nodeset     string     `json:"nodeset"`
 	ErrorDetail string     `json:"error_detail,omitempty"`
-	Final       string     `json:"final"`
-	Held        string     `json:"held"`
+	Final       any        `json:"final"`
+	Held        any        `json:"held"`
 	Ref         BuildRef   `json:"ref"`
 	Artifacts   []Artifact `json:"artifacts,omitempty"`
 }
@@ -26,8 +26,8 @@ type Build struct {
 type BuildRef struct {
 	Project  string `json:"project"`
 	Branch   string `json:"branch"`
-	Change   string `json:"change"`
-	Patchset string `json:"patchset"`
+	Change   any    `json:"change"`
+	Patchset any    `json:"patchset"`
 	Ref      string `json:"ref"`
 	RefURL   string `json:"ref_url"`
 	Newrev   string `json:"newrev"`
@@ -104,7 +104,7 @@ func (c *Client) GetBuild(uuid string) (*Build, error) {
 }
 
 type Buildset struct {
-	ID                 string       `json:"_id"`
+	ID                 any          `json:"_id"`
 	UUID               string       `json:"uuid"`
 	Result             string       `json:"result"`
 	Message            string       `json:"message,omitempty"`

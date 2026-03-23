@@ -19,6 +19,10 @@ func NewLabelsView(app *tview.Application) *LabelsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	table.SetSelectedStyle(tcell.StyleDefault.
+		Background(tcell.NewRGBColor(30, 30, 42)).
+		Foreground(tcell.ColorWhite).
+		Attributes(tcell.AttrBold))
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true)
@@ -30,18 +34,17 @@ func NewLabelsView(app *tview.Application) *LabelsView {
 func (v *LabelsView) Root() tview.Primitive { return v.root }
 
 func (v *LabelsView) Load(client *api.Client) {
-	v.table.Clear()
-	setTableHeader(v.table, "Label")
-
 	go func() {
 		labels, err := client.GetLabels()
 		v.app.QueueUpdateDraw(func() {
+			v.table.Clear()
+			setTableHeader(v.table, "Label")
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf("[red]Error: %v[-]", err)))
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			for i, l := range labels {
-				v.table.SetCell(i+1, 0, tview.NewTableCell(l.Name).SetTextColor(tcell.ColorWhite))
+				v.table.SetCell(i+1, 0, tview.NewTableCell(" "+l.Name).SetTextColor(tcell.ColorWhite))
 			}
 		})
 	}()

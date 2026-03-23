@@ -17,8 +17,10 @@ type App struct {
 	app      *tview.Application
 	pages    *tview.Pages
 	nav      *NavBar
-	header   *tview.TextView
-	footer   *tview.TextView
+	header      *tview.TextView
+	footer      *tview.Flex
+	footerKeys  *tview.TextView
+	footerTime  *tview.TextView
 	client   *api.Client
 	cfg      *config.Config
 	views    []views.View
@@ -55,9 +57,12 @@ func New(cfg *config.Config) (*App, error) {
 		a.pages.AddPage(tabNames[i], v.Root(), true, i == 0)
 	}
 
+	navSpacer := tview.NewBox().SetBackgroundColor(ColorBg)
+
 	layout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(a.header, 1, 0, false).
 		AddItem(a.nav, 1, 0, false).
+		AddItem(navSpacer, 1, 0, false).
 		AddItem(a.pages, 0, 1, true).
 		AddItem(a.footer, 1, 0, false)
 
@@ -79,18 +84,30 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	tv.SetBackgroundColor(ColorHeaderBg)
-	fmt.Fprintf(tv, " [bold::b]hZuul[-:-:-] │ [::d]%s[-:-:-] │ tenant: [blue]%s[-] │ context: [green]%s[-]",
+	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]│[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
 		ctx.URL, ctx.Tenant, a.cfg.CurrentContext)
 	return tv
 }
 
-func (a *App) buildFooter() *tview.TextView {
-	tv := tview.NewTextView().
+func (a *App) buildFooter() *tview.Flex {
+	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	tv.SetBackgroundColor(ColorHeaderBg)
-	fmt.Fprint(tv, " [::d]q[-]:quit  [::d]?[-]:help  [::d]t[-]:tenant  [::d]r[-]:refresh  [::d]1-9[-]:views  [::d]/[-]:filter")
-	return tv
+	keys.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(keys, " [blue]q[-][::d]:quit[-]  [blue]?[-][::d]:help[-]  [blue]t[-][::d]:tenant[-]  [blue]r[-][::d]:refresh[-]  [blue]1-9[-][::d]:views[-]  [blue]/[-][::d]:filter[-]")
+
+	ts := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignRight)
+	ts.SetBackgroundColor(ColorNavBg)
+
+	a.footerKeys = keys
+	a.footerTime = ts
+
+	flex := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(keys, 0, 1, false).
+		AddItem(ts, 22, 0, false)
+	return flex
 }
 
 func (a *App) buildViews() []views.View {
@@ -125,9 +142,9 @@ func (a *App) autoRefresh() {
 		case <-a.stopCh:
 			return
 		case <-ticker.C:
+			idx := a.nav.Active()
+			a.views[idx].Load(a.client)
 			a.app.QueueUpdateDraw(func() {
-				idx := a.nav.Active()
-				a.views[idx].Load(a.client)
 				a.updateFooterTime()
 			})
 		}
@@ -135,9 +152,8 @@ func (a *App) autoRefresh() {
 }
 
 func (a *App) updateFooterTime() {
-	a.footer.Clear()
-	fmt.Fprintf(a.footer, " [::d]q[-]:quit  [::d]?[-]:help  [::d]t[-]:tenant  [::d]r[-]:refresh  [::d]1-9[-]:views  [::d]/[-]:filter │ [::d]last update: %s[-]",
-		time.Now().Format("15:04:05"))
+	a.footerTime.Clear()
+	fmt.Fprintf(a.footerTime, "[::d]last update: %s [-]", time.Now().Format("15:04:05"))
 }
 
 func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
@@ -232,7 +248,7 @@ func (a *App) showTenantPicker() {
 					a.client.SetTenant(name)
 					a.header.Clear()
 					ctx, _ := a.cfg.Active()
-					fmt.Fprintf(a.header, " [bold::b]hZuul[-:-:-] │ [::d]%s[-:-:-] │ tenant: [blue]%s[-] │ context: [green]%s[-]",
+					fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]│[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
 						ctx.URL, name, a.cfg.CurrentContext)
 					a.pages.RemovePage("tenants")
 					a.views[a.nav.Active()].Load(a.client)

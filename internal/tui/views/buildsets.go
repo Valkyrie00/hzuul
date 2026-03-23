@@ -20,6 +20,10 @@ func NewBuildsetsView(app *tview.Application) *BuildsetsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	table.SetSelectedStyle(tcell.StyleDefault.
+		Background(tcell.NewRGBColor(30, 30, 42)).
+		Foreground(tcell.ColorWhite).
+		Attributes(tcell.AttrBold))
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true)
@@ -31,19 +35,18 @@ func NewBuildsetsView(app *tview.Application) *BuildsetsView {
 func (v *BuildsetsView) Root() tview.Primitive { return v.root }
 
 func (v *BuildsetsView) Load(client *api.Client) {
-	v.table.Clear()
-	setTableHeader(v.table, "Pipeline", "Project", "Change", "Result", "Start", "End")
-
 	go func() {
 		buildsets, err := client.GetBuildsets(&api.BuildFilter{Limit: 50})
 		v.app.QueueUpdateDraw(func() {
+			v.table.Clear()
+			setTableHeader(v.table, "Pipeline", "Project", "Change", "Result", "Start", "End")
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf("[red]Error: %v[-]", err)))
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			for i, bs := range buildsets {
 				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(bs.Pipeline).SetTextColor(tcell.ColorWhite))
+				v.table.SetCell(row, 0, tview.NewTableCell(" "+bs.Pipeline).SetTextColor(tcell.ColorWhite))
 
 				var projects []string
 				for _, r := range bs.Refs {
@@ -51,16 +54,16 @@ func (v *BuildsetsView) Load(client *api.Client) {
 						projects = append(projects, r.Project)
 					}
 				}
-				v.table.SetCell(row, 1, tview.NewTableCell(strings.Join(projects, ", ")).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 1, tview.NewTableCell(" "+strings.Join(projects, ", ")).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
 
 				var change string
-				if len(bs.Refs) > 0 && bs.Refs[0].Change != "" {
-					change = fmt.Sprintf("%s,%s", bs.Refs[0].Change, bs.Refs[0].Patchset)
+				if len(bs.Refs) > 0 && bs.Refs[0].Change != nil {
+					change = fmt.Sprintf("%v,%v", bs.Refs[0].Change, bs.Refs[0].Patchset)
 				}
-				v.table.SetCell(row, 2, tview.NewTableCell(change).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
+				v.table.SetCell(row, 2, tview.NewTableCell(" "+change).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
 				v.table.SetCell(row, 3, resultCell(bs.Result))
-				v.table.SetCell(row, 4, tview.NewTableCell(bs.FirstBuildStart).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
-				v.table.SetCell(row, 5, tview.NewTableCell(bs.LastBuildEnd).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
+				v.table.SetCell(row, 4, tview.NewTableCell(" "+bs.FirstBuildStart).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
+				v.table.SetCell(row, 5, tview.NewTableCell(" "+bs.LastBuildEnd).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
 			}
 		})
 	}()
