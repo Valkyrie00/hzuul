@@ -1,6 +1,8 @@
 package views
 
 import (
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -9,6 +11,19 @@ var (
 	colorTableHeader = tcell.NewRGBColor(56, 132, 244)
 	colorSeparator   = tcell.NewRGBColor(50, 50, 65)
 )
+
+func rowMatchesFilter(filter string, fields ...string) bool {
+	if filter == "" {
+		return true
+	}
+	lf := strings.ToLower(filter)
+	for _, f := range fields {
+		if strings.Contains(strings.ToLower(f), lf) {
+			return true
+		}
+	}
+	return false
+}
 
 // setTableHeader writes a bold blue header row (row 0).
 // Data rows should start at row 1. Use SetFixed(1, 0).

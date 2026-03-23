@@ -9,9 +9,11 @@ import (
 )
 
 type LabelsView struct {
-	root  *tview.Flex
-	table *tview.Table
-	app   *tview.Application
+	root   *tview.Flex
+	table  *tview.Table
+	app    *tview.Application
+	labels []api.Label
+	filter string
 }
 
 func NewLabelsView(app *tview.Application) *LabelsView {
@@ -33,6 +35,11 @@ func NewLabelsView(app *tview.Application) *LabelsView {
 
 func (v *LabelsView) Root() tview.Primitive { return v.root }
 
+func (v *LabelsView) SetFilter(term string) {
+	v.filter = term
+	v.renderTable()
+}
+
 func (v *LabelsView) Load(client *api.Client) {
 	go func() {
 		labels, err := client.GetLabels()
@@ -43,9 +50,24 @@ func (v *LabelsView) Load(client *api.Client) {
 				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
-			for i, l := range labels {
-				v.table.SetCell(i+1, 0, tview.NewTableCell(" "+l.Name).SetTextColor(tcell.ColorWhite))
-			}
+			v.labels = labels
+			v.renderTable()
 		})
 	}()
+}
+
+func (v *LabelsView) renderTable() {
+	v.table.Clear()
+	setTableHeader(v.table, "Label")
+	row := 1
+	for _, l := range v.labels {
+		if !rowMatchesFilter(v.filter, l.Name) {
+			continue
+		}
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+l.Name).SetTextColor(tcell.ColorWhite))
+		row++
+	}
+	if row == 1 && v.filter != "" {
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetSelectable(false))
+	}
 }

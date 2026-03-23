@@ -15,6 +15,8 @@ type BuildsView struct {
 	pages    *tview.Pages
 	app      *tview.Application
 	builds   []api.Build
+	indexMap  []int // visible table row index -> original builds slice index
+	filter   string
 	onDetail bool
 }
 
@@ -47,8 +49,8 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	}
 
 	table.SetSelectedFunc(func(row, _ int) {
-		idx := row - 1
-		if idx < 0 || idx >= len(v.builds) {
+		idx := v.buildIndex(row)
+		if idx < 0 {
 			return
 		}
 		build := v.builds[idx]
@@ -60,8 +62,8 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'l' {
 			row, _ := table.GetSelection()
-			idx := row - 1
-			if idx >= 0 && idx < len(v.builds) {
+			idx := v.buildIndex(row)
+			if idx >= 0 {
 				build := v.builds[idx]
 				v.logView.StreamBuild(nil, &build)
 				v.pages.SwitchToPage("detail")
@@ -87,6 +89,19 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 
 func (v *BuildsView) Root() tview.Primitive { return v.root }
 
+func (v *BuildsView) SetFilter(term string) {
+	v.filter = term
+	v.renderTable()
+}
+
+func (v *BuildsView) buildIndex(row int) int {
+	ri := row - 1
+	if ri < 0 || ri >= len(v.indexMap) {
+		return -1
+	}
+	return v.indexMap[ri]
+}
+
 func (v *BuildsView) Load(client *api.Client) {
 	if v.onDetail {
 		return
@@ -102,16 +117,33 @@ func (v *BuildsView) Load(client *api.Client) {
 				return
 			}
 			v.builds = builds
-			for i, b := range builds {
-				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(" "+b.JobName).SetTextColor(tcell.ColorWhite))
-				v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 3, tview.NewTableCell(" ").SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 4, resultCell(b.Result))
-				v.table.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf(" %v", b.Duration)).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 6, tview.NewTableCell(" "+b.StartTime).SetTextColor(tcell.NewRGBColor(90, 90, 110)))
-			}
+			v.renderTable()
 		})
 	}()
+}
+
+func (v *BuildsView) renderTable() {
+	v.table.Clear()
+	setTableHeader(v.table, "Job", "Project", "Branch", "Pipeline", "Result", "Duration", "Start")
+	muted := tcell.NewRGBColor(120, 120, 140)
+	dim := tcell.NewRGBColor(90, 90, 110)
+	v.indexMap = nil
+	row := 1
+	for i, b := range v.builds {
+		if !rowMatchesFilter(v.filter, b.JobName, b.Ref.Project, b.Ref.Branch, b.Result) {
+			continue
+		}
+		v.indexMap = append(v.indexMap, i)
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+b.JobName).SetTextColor(tcell.ColorWhite))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(muted))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted))
+		v.table.SetCell(row, 3, tview.NewTableCell(" ").SetTextColor(muted))
+		v.table.SetCell(row, 4, resultCell(b.Result))
+		v.table.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf(" %v", b.Duration)).SetTextColor(muted))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim))
+		row++
+	}
+	if row == 1 && v.filter != "" {
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetSelectable(false))
+	}
 }

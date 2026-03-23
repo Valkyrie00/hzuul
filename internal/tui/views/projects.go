@@ -9,9 +9,11 @@ import (
 )
 
 type ProjectsView struct {
-	root  *tview.Flex
-	table *tview.Table
-	app   *tview.Application
+	root     *tview.Flex
+	table    *tview.Table
+	app      *tview.Application
+	projects []api.Project
+	filter   string
 }
 
 func NewProjectsView(app *tview.Application) *ProjectsView {
@@ -34,6 +36,11 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 
 func (v *ProjectsView) Root() tview.Primitive { return v.root }
 
+func (v *ProjectsView) SetFilter(term string) {
+	v.filter = term
+	v.renderTable()
+}
+
 func (v *ProjectsView) Load(client *api.Client) {
 	go func() {
 		projects, err := client.GetProjects()
@@ -44,12 +51,27 @@ func (v *ProjectsView) Load(client *api.Client) {
 				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
-			for i, p := range projects {
-				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(" "+p.Name).SetTextColor(tcell.ColorWhite))
-				v.table.SetCell(row, 1, tview.NewTableCell(" "+p.Type).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-				v.table.SetCell(row, 2, tview.NewTableCell(" "+p.ConnectionName).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-			}
+			v.projects = projects
+			v.renderTable()
 		})
 	}()
+}
+
+func (v *ProjectsView) renderTable() {
+	v.table.Clear()
+	setTableHeader(v.table, "Name", "Type", "Connection")
+	muted := tcell.NewRGBColor(120, 120, 140)
+	row := 1
+	for _, p := range v.projects {
+		if !rowMatchesFilter(v.filter, p.Name, p.Type, p.ConnectionName) {
+			continue
+		}
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+p.Name).SetTextColor(tcell.ColorWhite))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+p.Type).SetTextColor(muted))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+p.ConnectionName).SetTextColor(muted))
+		row++
+	}
+	if row == 1 && v.filter != "" {
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetSelectable(false))
+	}
 }

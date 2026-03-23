@@ -40,6 +40,7 @@ type StatusView struct {
 	rows     []statusRow
 	expanded map[int]bool // rowIdx → expanded
 	status   *api.Status
+	filter   string
 }
 
 func NewStatusView(app *tview.Application) *StatusView {
@@ -153,6 +154,14 @@ func NewStatusView(app *tview.Application) *StatusView {
 
 func (v *StatusView) Root() tview.Primitive { return v.root }
 
+func (v *StatusView) SetFilter(term string) {
+	v.filter = term
+	v.rebuildTable()
+	if v.table.GetRowCount() > 1 {
+		v.table.Select(1, 0)
+	}
+}
+
 func (v *StatusView) Load(client *api.Client) {
 	v.client = client
 
@@ -226,6 +235,21 @@ func (v *StatusView) setStatusHeader() {
 	}
 }
 
+func (v *StatusView) statusRowMatchesFilter(sr statusRow) bool {
+	if v.filter == "" {
+		return true
+	}
+	project := sr.item.ProjectName()
+	if project == "" {
+		project = sr.queue
+	}
+	fields := []string{project, sr.item.ChangeID(), sr.item.Owner(), sr.pipeline}
+	for _, j := range sr.item.Jobs {
+		fields = append(fields, j.Name)
+	}
+	return rowMatchesFilter(v.filter, fields...)
+}
+
 func (v *StatusView) rebuildTable() {
 	v.table.Clear()
 	v.setStatusHeader()
@@ -252,14 +276,22 @@ func (v *StatusView) rebuildTable() {
 		}
 	}
 
-	for gi, g := range groups {
-		// Spacer row between pipeline sections
-		if gi > 0 {
+	sectionsRendered := 0
+	for _, g := range groups {
+		var matchingIndices []int
+		for i := g.start; i < g.start+g.count; i++ {
+			if v.statusRowMatchesFilter(v.rows[i]) {
+				matchingIndices = append(matchingIndices, i)
+			}
+		}
+		if len(matchingIndices) == 0 {
+			continue
+		}
+
+		if sectionsRendered > 0 {
 			for col := 0; col < statusCols; col++ {
 				exp := 0
-				if col == 0 {
-				exp = 1
-			} else if col == statusCols-1 {
+				if col == 0 || col == statusCols-1 {
 					exp = 1
 				}
 				v.table.SetCell(tableRow, col,
@@ -268,8 +300,7 @@ func (v *StatusView) rebuildTable() {
 			tableRow++
 		}
 
-		// Pipeline section header with ── decoration
-		headerText := fmt.Sprintf(" ── %s (%d) ", g.name, g.count)
+		headerText := fmt.Sprintf(" ── %s (%d) ", g.name, len(matchingIndices))
 		v.table.SetCell(tableRow, 0, tview.NewTableCell(headerText).
 			SetTextColor(sectionColor).SetAttributes(tcell.AttrBold).
 			SetBackgroundColor(sectionBg).SetExpansion(1).SetMaxWidth(45))
@@ -282,8 +313,9 @@ func (v *StatusView) rebuildTable() {
 				tview.NewTableCell("").SetBackgroundColor(sectionBg).SetExpansion(exp))
 		}
 		tableRow++
+		sectionsRendered++
 
-		for i := g.start; i < g.start+g.count; i++ {
+		for _, i := range matchingIndices {
 			sr := v.rows[i]
 			v.rowMap[tableRow] = rowEntry{kind: "change", rowIdx: i}
 
@@ -347,6 +379,8 @@ func (v *StatusView) rebuildTable() {
 
 	if len(v.rows) == 0 {
 		v.table.SetCell(tableRow, 0, tview.NewTableCell(" [::d]All pipelines idle[-]").SetExpansion(1))
+	} else if tableRow == 1 && v.filter != "" {
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetExpansion(1))
 	}
 }
 

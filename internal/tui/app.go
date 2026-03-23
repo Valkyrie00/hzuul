@@ -14,17 +14,19 @@ import (
 const defaultRefreshInterval = 30 * time.Second
 
 type App struct {
-	app      *tview.Application
-	pages    *tview.Pages
-	nav      *NavBar
-	header      *tview.TextView
-	footer      *tview.Flex
-	footerKeys  *tview.TextView
-	footerTime  *tview.TextView
-	client   *api.Client
-	cfg      *config.Config
-	views    []views.View
-	stopCh   chan struct{}
+	app    *tview.Application
+	pages  *tview.Pages
+	nav    *NavBar
+	header     *tview.TextView
+	footer     *tview.Flex
+	footerKeys *tview.TextView
+	footerTime *tview.TextView
+	filterText string
+	filterOpen bool
+	client  *api.Client
+	cfg     *config.Config
+	views   []views.View
+	stopCh  chan struct{}
 	refreshInterval time.Duration
 }
 
@@ -49,7 +51,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	a.header = a.buildHeader(ctx)
-	a.footer = a.buildFooter()
+	a.buildFooter()
 	a.nav = NewNavBar(a.switchView)
 	a.views = a.buildViews()
 
@@ -89,12 +91,11 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 	return tv
 }
 
-func (a *App) buildFooter() *tview.Flex {
+func (a *App) buildFooter() {
 	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [blue]q[-][::d]:quit[-]  [blue]?[-][::d]:help[-]  [blue]t[-][::d]:tenant[-]  [blue]r[-][::d]:refresh[-]  [blue]1-9[-][::d]:views[-]  [blue]/[-][::d]:filter[-]")
 
 	ts := tview.NewTextView().
 		SetDynamicColors(true).
@@ -103,11 +104,29 @@ func (a *App) buildFooter() *tview.Flex {
 
 	a.footerKeys = keys
 	a.footerTime = ts
+	a.updateFooterKeysText()
 
-	flex := tview.NewFlex().SetDirection(tview.FlexColumn).
+	a.footer = tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(keys, 0, 1, false).
 		AddItem(ts, 22, 0, false)
-	return flex
+}
+
+const footerKeysBase = " [blue]q[-][::d]:quit[-]  [blue]?[-][::d]:help[-]  [blue]t[-][::d]:tenant[-]  [blue]r[-][::d]:refresh[-]  [blue]1-9[-][::d]:views[-]  [blue]/[-][::d]:filter[-]"
+
+func (a *App) updateFooterKeysText() {
+	a.footerKeys.Clear()
+	if a.filterOpen {
+		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-][::d]█[-]", a.filterText)
+	} else if a.filterText != "" {
+		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
+	} else {
+		fmt.Fprint(a.footerKeys, footerKeysBase)
+	}
+}
+
+func (a *App) applyFilter() {
+	idx := a.nav.Active()
+	a.views[idx].SetFilter(a.filterText)
 }
 
 func (a *App) buildViews() []views.View {
@@ -128,6 +147,14 @@ func (a *App) switchView(index int) {
 	if index < 0 || index >= len(tabNames) {
 		return
 	}
+	old := a.nav.Active()
+	if old >= 0 && old < len(a.views) {
+		a.views[old].SetFilter("")
+	}
+	a.filterOpen = false
+	a.filterText = ""
+	a.updateFooterKeysText()
+
 	a.pages.SwitchToPage(tabNames[index])
 	a.views[index].Load(a.client)
 	a.updateFooterTime()
@@ -157,6 +184,35 @@ func (a *App) updateFooterTime() {
 }
 
 func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
+	if a.filterOpen {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			a.filterOpen = false
+			a.filterText = ""
+			a.applyFilter()
+			a.updateFooterKeysText()
+			return nil
+		case tcell.KeyEnter:
+			a.filterOpen = false
+			a.updateFooterKeysText()
+			return nil
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			if len(a.filterText) > 0 {
+				runes := []rune(a.filterText)
+				a.filterText = string(runes[:len(runes)-1])
+				a.applyFilter()
+				a.updateFooterKeysText()
+			}
+			return nil
+		case tcell.KeyRune:
+			a.filterText += string(event.Rune())
+			a.applyFilter()
+			a.updateFooterKeysText()
+			return nil
+		}
+		return nil
+	}
+
 	if a.nav.HandleKey(event) {
 		return nil
 	}
@@ -175,6 +231,10 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case 't':
 		a.showTenantPicker()
+		return nil
+	case '/':
+		a.filterOpen = true
+		a.updateFooterKeysText()
 		return nil
 	}
 
@@ -198,7 +258,7 @@ func (a *App) showHelp() {
 
 [blue]Tables[-]
   Up/Down     Navigate rows
-  /           Filter (future)
+  /           Filter rows (Esc to clear)
 
 [blue]General[-]
   ?           This help

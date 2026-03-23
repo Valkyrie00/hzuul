@@ -9,9 +9,11 @@ import (
 )
 
 type SemaphoresView struct {
-	root  *tview.Flex
-	table *tview.Table
-	app   *tview.Application
+	root   *tview.Flex
+	table  *tview.Table
+	app    *tview.Application
+	sems   []api.Semaphore
+	filter string
 }
 
 func NewSemaphoresView(app *tview.Application) *SemaphoresView {
@@ -33,6 +35,11 @@ func NewSemaphoresView(app *tview.Application) *SemaphoresView {
 
 func (v *SemaphoresView) Root() tview.Primitive { return v.root }
 
+func (v *SemaphoresView) SetFilter(term string) {
+	v.filter = term
+	v.renderTable()
+}
+
 func (v *SemaphoresView) Load(client *api.Client) {
 	go func() {
 		sems, err := client.GetSemaphores()
@@ -43,16 +50,31 @@ func (v *SemaphoresView) Load(client *api.Client) {
 				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
-			if len(sems) == 0 {
-				v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No semaphores[-]").SetSelectable(false))
-				return
-			}
-			for i, s := range sems {
-				row := i + 1
-				v.table.SetCell(row, 0, tview.NewTableCell(" "+s.Name).SetTextColor(tcell.ColorWhite))
-				v.table.SetCell(row, 1, tview.NewTableCell(fmt.Sprintf(" %d", s.Max)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
-				v.table.SetCell(row, 2, tview.NewTableCell(fmt.Sprintf(" %d", s.Value)).SetTextColor(tcell.NewRGBColor(120, 120, 140)))
-			}
+			v.sems = sems
+			v.renderTable()
 		})
 	}()
+}
+
+func (v *SemaphoresView) renderTable() {
+	v.table.Clear()
+	setTableHeader(v.table, "Name", "Max", "Current")
+	muted := tcell.NewRGBColor(120, 120, 140)
+	row := 1
+	for _, s := range v.sems {
+		if !rowMatchesFilter(v.filter, s.Name) {
+			continue
+		}
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+s.Name).SetTextColor(tcell.ColorWhite))
+		v.table.SetCell(row, 1, tview.NewTableCell(fmt.Sprintf(" %d", s.Max)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
+		v.table.SetCell(row, 2, tview.NewTableCell(fmt.Sprintf(" %d", s.Value)).SetTextColor(muted))
+		row++
+	}
+	if row == 1 {
+		msg := " [::d]No semaphores[-]"
+		if v.filter != "" {
+			msg = fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)
+		}
+		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetSelectable(false))
+	}
 }

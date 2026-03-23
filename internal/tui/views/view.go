@@ -9,4 +9,5 @@ import (
 type View interface {
 	Root() tview.Primitive
 	Load(client *api.Client)
+	SetFilter(term string)
 }
