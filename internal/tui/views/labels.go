@@ -53,6 +53,8 @@ func (v *LabelsView) Load(client *api.Client) {
 			}
 			v.labels = labels
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }

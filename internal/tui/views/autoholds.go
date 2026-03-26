@@ -53,6 +53,8 @@ func (v *AutoholdsView) Load(client *api.Client) {
 			}
 			v.holds = holds
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }

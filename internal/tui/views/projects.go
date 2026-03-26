@@ -186,6 +186,8 @@ func (v *ProjectsView) Load(client *api.Client) {
 			}
 			v.projects = projects
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }

@@ -235,20 +235,22 @@ func (v *JobsView) Load(client *api.Client) {
 		jobs, err := client.GetJobs()
 		v.app.QueueUpdateDraw(func() {
 			v.table.Clear()
-			setTableHeader(v.table, "Name", "Description", "Tags")
+			setTableHeader(v.table, "Name", "Description")
 			if err != nil {
 				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			v.jobs = jobs
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }
 
 func (v *JobsView) renderTable() {
 	v.table.Clear()
-	setTableHeader(v.table, "Name", "Description", "Tags")
+	setTableHeader(v.table, "Name", "Description")
 	muted := tcell.NewRGBColor(120, 120, 140)
 	v.indexMap = nil
 	row := 1
@@ -259,12 +261,7 @@ func (v *JobsView) renderTable() {
 		}
 		v.indexMap = append(v.indexMap, i)
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+j.Name).SetTextColor(tcell.ColorWhite))
-		desc := j.Description
-		if len(desc) > 60 {
-			desc = desc[:57] + "..."
-		}
-		v.table.SetCell(row, 1, tview.NewTableCell(" "+desc).SetTextColor(muted))
-		v.table.SetCell(row, 2, tview.NewTableCell(" "+tags).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+j.Description).SetTextColor(muted).SetExpansion(1))
 		row++
 	}
 	if row == 1 && v.filter != "" {

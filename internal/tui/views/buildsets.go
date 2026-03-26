@@ -54,6 +54,8 @@ func (v *BuildsetsView) Load(client *api.Client) {
 			}
 			v.buildsets = buildsets
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }

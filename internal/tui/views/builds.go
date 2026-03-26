@@ -129,6 +129,8 @@ func (v *BuildsView) Load(client *api.Client) {
 			}
 			v.builds = builds
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }

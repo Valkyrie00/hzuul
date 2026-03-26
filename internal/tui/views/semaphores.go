@@ -53,6 +53,8 @@ func (v *SemaphoresView) Load(client *api.Client) {
 			}
 			v.sems = sems
 			v.renderTable()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }
