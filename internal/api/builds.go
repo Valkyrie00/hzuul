@@ -13,6 +13,7 @@ type Build struct {
 	ID          any        `json:"_id"`
 	UUID        string     `json:"uuid"`
 	JobName     string     `json:"job_name"`
+	Pipeline    string     `json:"pipeline"`
 	Result      string     `json:"result"`
 	StartTime   string     `json:"start_time"`
 	EndTime     string     `json:"end_time"`
@@ -131,10 +132,31 @@ type TaskHostResult struct {
 	Cmd          any    `json:"cmd"`
 	Stdout       string `json:"stdout"`
 	Stderr       string `json:"stderr"`
-	Msg          string `json:"msg"`
+	Msg          any    `json:"msg"`
 	StdoutLines  []any  `json:"stdout_lines"`
 	StderrLines  []any  `json:"stderr_lines"`
 	IgnoreErrors bool   `json:"_ansible_ignore_errors"`
+}
+
+func anyToString(v any) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case []any:
+		parts := make([]string, 0, len(val))
+		for _, item := range val {
+			parts = append(parts, fmt.Sprintf("%v", item))
+		}
+		return strings.Join(parts, "\n")
+	case nil:
+		return ""
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func (r TaskHostResult) MsgString() string {
+	return anyToString(r.Msg)
 }
 
 func (r TaskHostResult) CmdString() string {
@@ -237,7 +259,7 @@ func ExtractFailedTasks(output []PlaybookOutput, stats map[string]HostStats) []F
 					if hs, ok := stats[host]; ok && hs.Failures == 0 {
 						continue
 					}
-					msg := result.Msg
+					msg := result.MsgString()
 					if msg == "" && result.Stderr != "" {
 						msg = result.Stderr
 					}

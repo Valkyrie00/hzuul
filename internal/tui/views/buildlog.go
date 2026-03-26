@@ -55,7 +55,7 @@ func NewBuildLogView(app *tview.Application) *BuildLogView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [blue]q[-][::d]:back[-:-:-]  [blue]o[-][::d]:open web[-:-:-]  [blue]l[-][::d]:open logs[-:-:-]  [blue]↑↓[-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [blue]esc[-:-:-][::d]:back[-:-:-]  [blue]o[-:-:-][::d]:open web[-:-:-]  [blue]l[-:-:-][::d]:open logs[-:-:-]  [blue]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).

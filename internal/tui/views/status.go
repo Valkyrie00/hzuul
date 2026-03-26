@@ -62,7 +62,7 @@ func NewStatusView(app *tview.Application) *StatusView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [blue]enter[-][::d]:expand/open[-:-:-]  [blue]o[-][::d]:open change[-:-:-]  [blue]↑↓[-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [blue]enter[-:-:-][::d]:expand/open[-:-:-]  [blue]o[-:-:-][::d]:open change[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).

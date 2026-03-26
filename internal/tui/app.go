@@ -111,7 +111,7 @@ func (a *App) buildFooter() {
 		AddItem(ts, 22, 0, false)
 }
 
-const footerKeysBase = " [blue]q[-][::d]:quit[-]  [blue]?[-][::d]:help[-]  [blue]t[-][::d]:tenant[-]  [blue]r[-][::d]:refresh[-]  [blue]1-9[-][::d]:views[-]  [blue]/[-][::d]:filter[-]"
+const footerKeysBase = " [blue]?[-:-:-][::d]:help[-:-:-]  [blue]t[-:-:-][::d]:tenant[-:-:-]  [blue]r[-:-:-][::d]:refresh[-:-:-]  [blue]1-9[-:-:-][::d]:views[-:-:-]  [blue]/[-:-:-][::d]:filter[-:-:-]  [blue]q[-:-:-][::d]:quit[-:-:-]"
 
 func (a *App) updateFooterKeysText() {
 	a.footerKeys.Clear()

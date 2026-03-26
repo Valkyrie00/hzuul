@@ -80,6 +80,10 @@ func (c *Client) BuildURL(uuid string) string {
 	return fmt.Sprintf("%s/t/%s/build/%s", c.baseURL, c.tenant, uuid)
 }
 
+func (c *Client) ProjectURL(canonicalName string) string {
+	return fmt.Sprintf("%s/t/%s/project/%s", c.baseURL, c.tenant, canonicalName)
+}
+
 func (c *Client) get(path string, params url.Values) (*http.Response, error) {
 	u := c.baseURL + path
 	if len(params) > 0 {
