@@ -76,6 +76,10 @@ func (c *Client) SetTenant(t string) {
 	c.tenant = t
 }
 
+func (c *Client) BuildURL(uuid string) string {
+	return fmt.Sprintf("%s/t/%s/build/%s", c.baseURL, c.tenant, uuid)
+}
+
 func (c *Client) get(path string, params url.Values) (*http.Response, error) {
 	u := c.baseURL + path
 	if len(params) > 0 {

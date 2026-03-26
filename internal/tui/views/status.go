@@ -146,6 +146,10 @@ func NewStatusView(app *tview.Application) *StatusView {
 			openURL(v.logView.openURL)
 			return nil
 		}
+		if event.Rune() == 'l' && v.logView.logURL != "" {
+			openURL(v.logView.logURL)
+			return nil
+		}
 		return event
 	})
 
@@ -516,7 +520,7 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 				}
 				return
 			}
-			v.logView.ShowStaticLog(build)
+			v.logView.ShowStaticLog(v.client, build)
 		})
 	}()
 }

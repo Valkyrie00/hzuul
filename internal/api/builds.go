@@ -1,8 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Build struct {
@@ -101,6 +105,157 @@ func (c *Client) GetBuild(uuid string) (*Build, error) {
 	var build Build
 	err := c.getJSON(c.tenantPath("build/"+uuid), nil, &build)
 	return &build, err
+}
+
+// PlaybookOutput represents one playbook entry from job-output.json.
+type PlaybookOutput struct {
+	Playbook string                    `json:"playbook"`
+	Phase    string                    `json:"phase"`
+	Stats    map[string]HostStats      `json:"stats"`
+	Plays    []PlayOutput              `json:"plays"`
+}
+
+type PlayOutput struct {
+	Play  map[string]any `json:"play"`
+	Tasks []TaskOutput   `json:"tasks"`
+}
+
+type TaskOutput struct {
+	Task  map[string]any            `json:"task"`
+	Hosts map[string]TaskHostResult `json:"hosts"`
+}
+
+type TaskHostResult struct {
+	Failed       bool   `json:"failed"`
+	Action       string `json:"action"`
+	Cmd          any    `json:"cmd"`
+	Stdout       string `json:"stdout"`
+	Stderr       string `json:"stderr"`
+	Msg          string `json:"msg"`
+	StdoutLines  []any  `json:"stdout_lines"`
+	StderrLines  []any  `json:"stderr_lines"`
+	IgnoreErrors bool   `json:"_ansible_ignore_errors"`
+}
+
+func (r TaskHostResult) CmdString() string {
+	switch v := r.Cmd.(type) {
+	case string:
+		return v
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, p := range v {
+			parts = append(parts, fmt.Sprintf("%v", p))
+		}
+		return strings.Join(parts, " ")
+	default:
+		if v != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return ""
+	}
+}
+
+type HostStats struct {
+	Ok          int `json:"ok"`
+	Changed     int `json:"changed"`
+	Failures    int `json:"failures"`
+	Skipped     int `json:"skipped"`
+	Unreachable int `json:"unreachable"`
+	Rescued     int `json:"rescued"`
+	Ignored     int `json:"ignored"`
+}
+
+type FailedTask struct {
+	Playbook string
+	Task     string
+	Host     string
+	Action   string
+	Cmd      string
+	Msg      string
+	Stdout   string
+	Stderr   string
+}
+
+func (c *Client) GetJobOutput(logURL string) ([]PlaybookOutput, error) {
+	u := strings.TrimRight(logURL, "/") + "/job-output.json"
+
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := c.doer.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetching job-output.json: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("job-output.json: %s — %s", resp.Status, string(body))
+	}
+
+	var output []PlaybookOutput
+	if err := json.NewDecoder(resp.Body).Decode(&output); err != nil {
+		return nil, fmt.Errorf("decoding job-output.json: %w", err)
+	}
+	return output, nil
+}
+
+// AggregateStats merges per-host stats across all playbooks.
+func AggregateStats(output []PlaybookOutput) map[string]HostStats {
+	merged := make(map[string]HostStats)
+	for _, pb := range output {
+		for host, s := range pb.Stats {
+			m := merged[host]
+			m.Ok += s.Ok
+			m.Changed += s.Changed
+			m.Failures += s.Failures
+			m.Skipped += s.Skipped
+			m.Unreachable += s.Unreachable
+			m.Rescued += s.Rescued
+			m.Ignored += s.Ignored
+			merged[host] = m
+		}
+	}
+	return merged
+}
+
+// ExtractFailedTasks collects tasks that actually caused failures,
+// filtering out tasks where ignore_errors was set or the host has no
+// real failures in the aggregated stats (e.g. rescued tasks).
+func ExtractFailedTasks(output []PlaybookOutput, stats map[string]HostStats) []FailedTask {
+	var failed []FailedTask
+	for _, pb := range output {
+		for _, play := range pb.Plays {
+			for _, task := range play.Tasks {
+				taskName, _ := task.Task["name"].(string)
+				for host, result := range task.Hosts {
+					if !result.Failed || result.IgnoreErrors {
+						continue
+					}
+					if hs, ok := stats[host]; ok && hs.Failures == 0 {
+						continue
+					}
+					msg := result.Msg
+					if msg == "" && result.Stderr != "" {
+						msg = result.Stderr
+					}
+					failed = append(failed, FailedTask{
+						Playbook: pb.Playbook,
+						Task:     taskName,
+						Host:     host,
+						Action:   result.Action,
+						Cmd:      result.CmdString(),
+						Msg:      msg,
+						Stdout:   result.Stdout,
+						Stderr:   result.Stderr,
+					})
+				}
+			}
+		}
+	}
+	return failed
 }
 
 type Buildset struct {

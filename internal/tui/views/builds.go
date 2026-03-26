@@ -14,6 +14,7 @@ type BuildsView struct {
 	logView  *BuildLogView
 	pages    *tview.Pages
 	app      *tview.Application
+	client   *api.Client
 	builds   []api.Build
 	indexMap  []int // visible table row index -> original builds slice index
 	filter   string
@@ -54,7 +55,7 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 			return
 		}
 		build := v.builds[idx]
-		v.logView.ShowStaticLog(&build)
+		v.logView.ShowStaticLog(v.client, &build)
 		v.pages.SwitchToPage("detail")
 		v.onDetail = true
 	})
@@ -81,6 +82,14 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 			v.onDetail = false
 			return nil
 		}
+		if event.Rune() == 'o' && v.logView.openURL != "" {
+			openURL(v.logView.openURL)
+			return nil
+		}
+		if event.Rune() == 'l' && v.logView.logURL != "" {
+			openURL(v.logView.logURL)
+			return nil
+		}
 		return event
 	})
 
@@ -103,6 +112,7 @@ func (v *BuildsView) buildIndex(row int) int {
 }
 
 func (v *BuildsView) Load(client *api.Client) {
+	v.client = client
 	if v.onDetail {
 		return
 	}
