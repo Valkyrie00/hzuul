@@ -38,6 +38,7 @@ func (v *SemaphoresView) Root() tview.Primitive { return v.root }
 func (v *SemaphoresView) SetFilter(term string) {
 	v.filter = term
 	v.renderTable()
+	v.table.Select(1, 0)
 }
 
 func (v *SemaphoresView) Load(client *api.Client) {

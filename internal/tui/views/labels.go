@@ -38,6 +38,7 @@ func (v *LabelsView) Root() tview.Primitive { return v.root }
 func (v *LabelsView) SetFilter(term string) {
 	v.filter = term
 	v.renderTable()
+	v.table.Select(1, 0)
 }
 
 func (v *LabelsView) Load(client *api.Client) {

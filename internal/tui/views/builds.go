@@ -101,6 +101,7 @@ func (v *BuildsView) Root() tview.Primitive { return v.root }
 func (v *BuildsView) SetFilter(term string) {
 	v.filter = term
 	v.renderTable()
+	v.table.Select(1, 0)
 }
 
 func (v *BuildsView) buildIndex(row int) int {

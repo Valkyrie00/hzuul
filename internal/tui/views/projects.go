@@ -159,6 +159,7 @@ func (v *ProjectsView) Root() tview.Primitive { return v.root }
 func (v *ProjectsView) SetFilter(term string) {
 	v.filter = term
 	v.renderTable()
+	v.table.Select(1, 0)
 }
 
 func (v *ProjectsView) projectIndex(row int) int {

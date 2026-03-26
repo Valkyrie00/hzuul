@@ -38,6 +38,7 @@ func (v *NodesView) Root() tview.Primitive { return v.root }
 func (v *NodesView) SetFilter(term string) {
 	v.filter = term
 	v.renderTable()
+	v.table.Select(1, 0)
 }
 
 func (v *NodesView) Load(client *api.Client) {

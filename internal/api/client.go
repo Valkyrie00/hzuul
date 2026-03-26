@@ -84,6 +84,10 @@ func (c *Client) ProjectURL(canonicalName string) string {
 	return fmt.Sprintf("%s/t/%s/project/%s", c.baseURL, c.tenant, canonicalName)
 }
 
+func (c *Client) JobURL(name string) string {
+	return fmt.Sprintf("%s/t/%s/job/%s", c.baseURL, c.tenant, name)
+}
+
 func (c *Client) get(path string, params url.Values) (*http.Response, error) {
 	u := c.baseURL + path
 	if len(params) > 0 {

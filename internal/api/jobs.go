@@ -18,8 +18,8 @@ func (c *Client) GetJobs() ([]Job, error) {
 	return jobs, err
 }
 
-func (c *Client) GetJob(name string) (map[string]any, error) {
-	var result map[string]any
+func (c *Client) GetJob(name string) ([]map[string]any, error) {
+	var result []map[string]any
 	err := c.getJSON(c.tenantPath("job/"+name), nil, &result)
 	return result, err
 }
