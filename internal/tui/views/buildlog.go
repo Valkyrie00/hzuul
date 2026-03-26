@@ -1,7 +1,9 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -180,9 +182,13 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	fmt.Fprintf(&b, "[bold]UUID:[-]      %s\n", build.UUID)
 	fmt.Fprintf(&b, "[bold]Project:[-]   %s\n", build.Ref.Project)
 	fmt.Fprintf(&b, "[bold]Branch:[-]    %s\n", build.Ref.Branch)
-	fmt.Fprintf(&b, "[bold]Change:[-]    %v,%v\n", build.Ref.Change, build.Ref.Patchset)
+	if build.Ref.Change != nil && build.Ref.Patchset != nil {
+		fmt.Fprintf(&b, "[bold]Change:[-]    %v,%v\n", build.Ref.Change, build.Ref.Patchset)
+	} else if build.Ref.Ref != "" {
+		fmt.Fprintf(&b, "[bold]Ref:[-]       %s\n", build.Ref.Ref)
+	}
 	fmt.Fprintf(&b, "[bold]Result:[-]    %s\n", resultTag(build.Result))
-	fmt.Fprintf(&b, "[bold]Duration:[-]  %v\n", build.Duration)
+	fmt.Fprintf(&b, "[bold]Duration:[-]  %s\n", formatBuildDuration(build.Duration))
 	fmt.Fprintf(&b, "[bold]Start:[-]     %s\n", build.StartTime)
 	fmt.Fprintf(&b, "[bold]End:[-]       %s\n", build.EndTime)
 	fmt.Fprintf(&b, "[bold]Voting:[-]    %v\n", build.Voting)
@@ -210,7 +216,7 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	fmt.Fprint(v.textView, v.baseContent)
 
 	if client != nil && build.LogURL != "" {
-		fmt.Fprintf(v.textView, "\n[::d]  ⏳ Loading task summary...[-:-:-]")
+		fmt.Fprintf(v.textView, "\n[::d] Loading task summary...[-:-:-]")
 		go v.fetchTaskSummary(client, build.LogURL)
 	}
 }
@@ -350,6 +356,36 @@ func wrapText(s string, width int) []string {
 		lines = append(lines, s)
 	}
 	return lines
+}
+
+func formatBuildDuration(v any) string {
+	var secs float64
+	switch d := v.(type) {
+	case float64:
+		secs = d
+	case int:
+		secs = float64(d)
+	case json.Number:
+		secs, _ = d.Float64()
+	default:
+		s := fmt.Sprintf("%v", v)
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			secs = f
+		} else {
+			return s
+		}
+	}
+	total := int(secs)
+	h := total / 3600
+	m := (total % 3600) / 60
+	s := total % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
 }
 
 func resultTag(result string) string {

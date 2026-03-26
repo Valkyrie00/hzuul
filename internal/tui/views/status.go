@@ -24,23 +24,25 @@ type statusRow struct {
 
 // rowEntry identifies what a table row represents.
 type rowEntry struct {
-	kind   string // "change" or "job"
-	rowIdx int    // index in StatusView.rows
-	jobIdx int    // index in rows[rowIdx].item.Jobs (only for kind=="job")
+	kind     string // "pipeline", "change" or "job"
+	rowIdx   int    // index in StatusView.rows (for "change"/"job")
+	jobIdx   int    // index in rows[rowIdx].item.Jobs (only for kind=="job")
+	pipeline string // pipeline name (only for kind=="pipeline")
 }
 
 type StatusView struct {
-	root     *tview.Flex
-	table    *tview.Table
-	logView  *BuildLogView
-	pages    *tview.Pages
-	app      *tview.Application
-	client   *api.Client
-	rowMap   map[int]rowEntry
-	rows     []statusRow
-	expanded map[int]bool // rowIdx → expanded
-	status   *api.Status
-	filter   string
+	root               *tview.Flex
+	table              *tview.Table
+	logView            *BuildLogView
+	pages              *tview.Pages
+	app                *tview.Application
+	client             *api.Client
+	rowMap             map[int]rowEntry
+	rows               []statusRow
+	expanded           map[int]bool    // rowIdx → expanded
+	collapsedPipelines map[string]bool // pipeline name → collapsed
+	status             *api.Status
+	filter             string
 }
 
 func NewStatusView(app *tview.Application) *StatusView {
@@ -55,8 +57,20 @@ func NewStatusView(app *tview.Application) *StatusView {
 
 	logView := NewBuildLogView(app)
 
+	navBg := tcell.NewRGBColor(32, 32, 44)
+	keys := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	keys.SetBackgroundColor(navBg)
+	fmt.Fprint(keys, " [blue]enter[-][::d]:expand/open[-:-:-]  [blue]o[-][::d]:open change[-:-:-]  [blue]↑↓[-][::d]:navigate[-:-:-]")
+
+	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(table, 0, 1, true).
+		AddItem(keys, 1, 0, false)
+	tableWithKeys.SetBackgroundColor(bg)
+
 	pages := tview.NewPages().
-		AddPage("table", table, true, true).
+		AddPage("table", tableWithKeys, true, true).
 		AddPage("log", logView.Root(), true, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -64,13 +78,14 @@ func NewStatusView(app *tview.Application) *StatusView {
 	root.SetBackgroundColor(bg)
 
 	v := &StatusView{
-		root:     root,
-		table:    table,
-		logView:  logView,
-		pages:    pages,
-		app:      app,
-		rowMap:   make(map[int]rowEntry),
-		expanded: make(map[int]bool),
+		root:               root,
+		table:              table,
+		logView:            logView,
+		pages:              pages,
+		app:                app,
+		rowMap:             make(map[int]rowEntry),
+		expanded:           make(map[int]bool),
+		collapsedPipelines: make(map[string]bool),
 	}
 
 	table.SetSelectedFunc(func(row, _ int) {
@@ -79,7 +94,24 @@ func NewStatusView(app *tview.Application) *StatusView {
 			return
 		}
 		switch entry.kind {
+		case "pipeline":
+			pname := entry.pipeline
+			v.collapsedPipelines[pname] = !v.collapsedPipelines[pname]
+			v.rebuildTable()
+			for r, e := range v.rowMap {
+				if e.kind == "pipeline" && e.pipeline == pname {
+					v.table.Select(r, 0)
+					break
+				}
+			}
 		case "change":
+			sr := v.rows[entry.rowIdx]
+			if len(sr.item.Jobs) == 0 {
+				if u := sr.item.ChangeURL(); u != "" {
+					openURL(u)
+				}
+				return
+			}
 			v.expanded[entry.rowIdx] = !v.expanded[entry.rowIdx]
 			sel, _ := v.table.GetSelection()
 			v.rebuildTable()
@@ -182,6 +214,7 @@ func (v *StatusView) Load(client *api.Client) {
 			}
 
 			sel, _ := v.table.GetSelection()
+			firstLoad := v.status == nil
 
 			v.status = status
 			v.collectRows(status)
@@ -194,6 +227,9 @@ func (v *StatusView) Load(client *api.Client) {
 				sel = 1
 			}
 			v.table.Select(sel, 0)
+			if firstLoad {
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
 }
@@ -304,7 +340,13 @@ func (v *StatusView) rebuildTable() {
 			tableRow++
 		}
 
-		headerText := fmt.Sprintf(" ── %s (%d) ", g.name, len(matchingIndices))
+		collapsed := v.collapsedPipelines[g.name]
+		arrow := "▾"
+		if collapsed {
+			arrow = "▸"
+		}
+		headerText := fmt.Sprintf(" %s %s (%d) ", arrow, g.name, len(matchingIndices))
+		v.rowMap[tableRow] = rowEntry{kind: "pipeline", pipeline: g.name}
 		v.table.SetCell(tableRow, 0, tview.NewTableCell(headerText).
 			SetTextColor(sectionColor).SetAttributes(tcell.AttrBold).
 			SetBackgroundColor(sectionBg).SetExpansion(1).SetMaxWidth(45))
@@ -319,15 +361,13 @@ func (v *StatusView) rebuildTable() {
 		tableRow++
 		sectionsRendered++
 
+		if collapsed {
+			continue
+		}
+
 		for _, i := range matchingIndices {
 			sr := v.rows[i]
 			v.rowMap[tableRow] = rowEntry{kind: "change", rowIdx: i}
-
-			running, success, failure, other := jobCounts(sr.item.Jobs)
-			total := len(sr.item.Jobs)
-			bar := compactProgress(running, success, failure, other, total)
-			summary := jobSummaryText(running, success, failure, other)
-			elapsed := formatElapsed(sr.item.EnqueueTime, now)
 
 			project := sr.item.ProjectName()
 			if project == "" {
@@ -335,17 +375,40 @@ func (v *StatusView) rebuildTable() {
 			}
 			changeID := sr.item.ChangeID()
 			owner := sr.item.Owner()
+			total := len(sr.item.Jobs)
+
+			displayID := changeID
+			if len(displayID) > 12 {
+				displayID = displayID[:8]
+			}
+
+			if total == 0 {
+				label := "[::d]queued[-]"
+				if !sr.item.Live {
+					label = "[::d]dependency[-]"
+				}
+				v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf("   ℹ %s", project)).SetTextColor(muted).SetExpansion(1))
+				v.table.SetCell(tableRow, 1, tview.NewTableCell(" #"+displayID).SetTextColor(muted).SetExpansion(0))
+				v.table.SetCell(tableRow, 2, tview.NewTableCell(" "+owner).SetTextColor(muted).SetExpansion(0))
+				v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetExpansion(0))
+				elapsed := formatElapsed(sr.item.EnqueueTime, now)
+				v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
+				v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+label).SetTextColor(muted).SetExpansion(1))
+				tableRow++
+				continue
+			}
+
+			running, success, failure, other := jobCounts(sr.item.Jobs)
+			bar := compactProgress(running, success, failure, other, total)
+			summary := jobSummaryText(running, success, failure, other)
+			elapsed := formatElapsed(sr.item.EnqueueTime, now)
 
 			arrow := "▸"
 			if v.expanded[i] {
 				arrow = "▾"
 			}
 
-			v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf(" %s %s", arrow, project)).SetTextColor(tcell.ColorWhite).SetExpansion(1))
-			displayID := changeID
-			if len(displayID) > 12 {
-				displayID = displayID[:8]
-			}
+			v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf("   %s %s", arrow, project)).SetTextColor(tcell.ColorWhite).SetExpansion(1))
 			v.table.SetCell(tableRow, 1, tview.NewTableCell(" #"+displayID).SetTextColor(muted).SetExpansion(0))
 			v.table.SetCell(tableRow, 2, tview.NewTableCell(" "+owner).SetTextColor(tcell.NewRGBColor(180, 160, 220)).SetExpansion(0))
 			v.table.SetCell(tableRow, 3, tview.NewTableCell(" "+bar).SetExpansion(0))
@@ -369,7 +432,7 @@ func (v *StatusView) rebuildTable() {
 					jobElapsed, _ := jobTimeParts(job, now)
 					resultText := jobResultText(result)
 
-					v.table.SetCell(tableRow, 0, tview.NewTableCell("       "+job.Name+nv).SetTextColor(nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 0, tview.NewTableCell("         "+job.Name+nv).SetTextColor(nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 1, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 2, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetBackgroundColor(jobBg))
@@ -387,7 +450,6 @@ func (v *StatusView) rebuildTable() {
 		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetExpansion(1))
 	}
 }
-
 
 func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 	v.logView.Stop()
@@ -560,7 +622,6 @@ func parseJobStreamURL(job api.JobStatus) (uuid, logfile string) {
 	return
 }
 
-
 func jobCounts(jobs []api.JobStatus) (running, success, failure, other int) {
 	for _, j := range jobs {
 		if j.Result == nil {
@@ -691,7 +752,6 @@ func formatElapsed(enqueueTime interface{ String() string }, now time.Time) stri
 	return formatDuration(d)
 }
 
-
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return "< 1m"
@@ -703,7 +763,6 @@ func formatDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dm", m)
 }
-
 
 func openURL(u string) {
 	var cmd string
