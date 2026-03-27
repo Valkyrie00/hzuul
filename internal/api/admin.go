@@ -20,12 +20,12 @@ type PromoteRequest struct {
 }
 
 type AutoholdRequest struct {
-	Job            string `json:"job"`
-	ChangeFilter   string `json:"change_filter,omitempty"`
-	RefFilter      string `json:"ref_filter,omitempty"`
-	Reason         string `json:"reason"`
-	Count          int    `json:"count"`
-	NodeHoldExpiry int    `json:"node_hold_expiration,omitempty"`
+	Job            string  `json:"job"`
+	Change         *string `json:"change"`
+	Ref            *string `json:"ref"`
+	Reason         string  `json:"reason"`
+	Count          int     `json:"count"`
+	NodeHoldExpiry int     `json:"node_hold_expiration"`
 }
 
 func (c *Client) Enqueue(project string, req *EnqueueRequest) error {

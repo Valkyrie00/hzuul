@@ -145,6 +145,7 @@ func (v *AutoholdsView) showCreateForm() {
 	labelColor := tcell.NewRGBColor(56, 132, 244)
 	btnBg := tcell.NewRGBColor(56, 132, 244)
 	btnActiveBg := tcell.NewRGBColor(72, 199, 142)
+	cancelBg := tcell.NewRGBColor(200, 50, 50)
 
 	form := tview.NewForm()
 	form.SetBackgroundColor(bg)
@@ -164,12 +165,15 @@ func (v *AutoholdsView) showCreateForm() {
 	form.AddInputField("Job *", "", 0, nil, nil)
 	form.AddInputField("Change", "", 0, nil, nil)
 	form.AddInputField("Ref", "", 0, nil, nil)
-	form.AddInputField("Reason *", "", 0, nil, nil)
+	form.AddInputField("Reason *", "Requested from HZUUL", 0, nil, nil)
 	form.AddInputField("Count", "1", 0, numAccept, nil)
 	form.AddInputField("Node Hold Expires in (s)", "86400", 0, numAccept, nil)
 
 	statusBar := tview.NewTextView().SetDynamicColors(true)
 	statusBar.SetBackgroundColor(bg)
+
+	createStyle := tcell.StyleDefault.Background(btnActiveBg).Foreground(tcell.ColorBlack)
+	cancelActiveStyle := tcell.StyleDefault.Background(tcell.NewRGBColor(235, 87, 87)).Foreground(tcell.ColorWhite)
 
 	form.AddButton("Create", func() {
 		project := form.GetFormItemByLabel("Project *").(*tview.InputField).GetText()
@@ -195,10 +199,18 @@ func (v *AutoholdsView) showCreateForm() {
 			expiry = 86400
 		}
 
+		var changePtr, refPtr *string
+		if change != "" {
+			changePtr = &change
+		}
+		if ref != "" {
+			refPtr = &ref
+		}
+
 		req := &api.AutoholdRequest{
 			Job:            job,
-			ChangeFilter:   change,
-			RefFilter:      ref,
+			Change:         changePtr,
+			Ref:            refPtr,
 			Reason:         reason,
 			Count:          count,
 			NodeHoldExpiry: expiry,
@@ -224,21 +236,44 @@ func (v *AutoholdsView) showCreateForm() {
 	form.AddButton("Cancel", func() {
 		v.closeForm()
 	})
+	cancelBtn := form.GetButton(form.GetButtonCount() - 1)
+	cancelBtn.SetBackgroundColor(cancelBg)
 
 	form.SetCancelFunc(func() {
 		v.closeForm()
 	})
 
+	totalItems := form.GetFormItemCount()
+	focusIdx := 0
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			focusIdx = (focusIdx + 1) % (totalItems + 2)
+		case tcell.KeyBacktab:
+			focusIdx = (focusIdx - 1 + totalItems + 2) % (totalItems + 2)
+		case tcell.KeyEnter:
+			if focusIdx < totalItems {
+				focusIdx = (focusIdx + 1) % (totalItems + 2)
+			}
+		}
+		if focusIdx == totalItems+1 {
+			form.SetButtonActivatedStyle(cancelActiveStyle)
+		} else {
+			form.SetButtonActivatedStyle(createStyle)
+		}
+		return event
+	})
+
 	header := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	header.SetBackgroundColor(bg)
-	fmt.Fprint(header, "\n [bold]Create Autohold Request[-]")
+	fmt.Fprint(header, " [bold]Create Autohold Request[-]")
 
 	hint := tview.NewTextView().SetDynamicColors(true)
 	hint.SetBackgroundColor(bg)
 	fmt.Fprint(hint, " [blue]tab[-:-:-][::d]:next field[-:-:-]  [blue]shift+tab[-:-:-][::d]:prev field[-:-:-]  [blue]enter[-:-:-][::d]:confirm[-:-:-]  [blue]esc[-:-:-][::d]:cancel[-:-:-]")
 
 	formPage := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(header, 2, 0, false).
+		AddItem(header, 1, 0, false).
 		AddItem(form, 0, 1, true).
 		AddItem(statusBar, 1, 0, false).
 		AddItem(hint, 1, 0, false)
@@ -247,6 +282,13 @@ func (v *AutoholdsView) showCreateForm() {
 	v.modal = true
 	v.pages.AddAndSwitchToPage("create", formPage, true)
 	v.app.SetFocus(form)
+}
+
+func (v *AutoholdsView) closeConfirm() {
+	v.modal = false
+	v.pages.SwitchToPage("table")
+	v.pages.RemovePage("confirm")
+	v.app.SetFocus(v.table)
 }
 
 func (v *AutoholdsView) confirmDelete() {
@@ -273,36 +315,126 @@ func (v *AutoholdsView) confirmDelete() {
 
 	hold := v.holds[idx]
 	bg := tcell.NewRGBColor(24, 24, 32)
+	muted := tcell.NewRGBColor(120, 120, 140)
+	deleteBg := tcell.NewRGBColor(200, 50, 50)
+	deleteActiveBg := tcell.NewRGBColor(235, 87, 87)
+	cancelBg := tcell.NewRGBColor(60, 60, 75)
+	cancelActiveBg := tcell.NewRGBColor(80, 80, 100)
 
-	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Delete autohold %s?\n\nProject: %s\nJob: %s", hold.ID, hold.Project, hold.Job)).
-		AddButtons([]string{"Delete", "Cancel"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "Delete" {
-				go func() {
-					err := v.client.DeleteAutohold(hold.ID)
-					v.app.QueueUpdateDraw(func() {
-						v.modal = false
-						v.pages.SwitchToPage("table")
-						v.pages.RemovePage("confirm")
-						v.app.SetFocus(v.table)
-						if err != nil {
-							v.table.SetCell(v.table.GetRowCount(), 0,
-								tview.NewTableCell(fmt.Sprintf(" [red]Delete failed: %v[-]", err)))
-							return
-						}
-						v.Load(v.client)
-					})
-				}()
-			} else {
-				v.modal = false
-				v.pages.SwitchToPage("table")
-				v.pages.RemovePage("confirm")
-				v.app.SetFocus(v.table)
-			}
-		})
-	modal.SetBackgroundColor(bg)
+	title := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+	title.SetBackgroundColor(bg)
+	fmt.Fprint(title, "[bold][red]Delete Autohold Request[-][-]")
+
+	details := tview.NewTextView().SetDynamicColors(true)
+	details.SetBackgroundColor(bg)
+	fmt.Fprintf(details, "   [::b]ID:[-:-:-]       [white]%s[-]\n", hold.ID)
+	fmt.Fprintf(details, "   [::b]Project:[-:-:-]  [white]%s[-]\n", hold.Project)
+	fmt.Fprintf(details, "   [::b]Job:[-:-:-]      [white]%s[-]", hold.Job)
+	detailRows := 3
+	if hold.RefFilter != "" {
+		fmt.Fprintf(details, "\n   [::b]Ref:[-:-:-]      [white]%s[-]", hold.RefFilter)
+		detailRows++
+	}
+	if hold.Reason != "" {
+		fmt.Fprintf(details, "\n   [::b]Reason:[-:-:-]   [white]%s[-]", hold.Reason)
+		detailRows++
+	}
+
+	warning := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+	warning.SetBackgroundColor(bg)
+	warning.SetTextColor(muted)
+	fmt.Fprint(warning, "This action cannot be undone.")
+
+	statusBar := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+	statusBar.SetBackgroundColor(bg)
+
+	form := tview.NewForm()
+	form.SetBackgroundColor(bg)
+	form.SetButtonsAlign(tview.AlignCenter)
+
+	deleteActiveStyle := tcell.StyleDefault.Background(deleteActiveBg).Foreground(tcell.ColorWhite)
+	cancelActiveStyle := tcell.StyleDefault.Background(cancelActiveBg).Foreground(tcell.ColorWhite)
+
+	form.SetButtonActivatedStyle(deleteActiveStyle)
+
+	form.AddButton("Delete", func() {
+		statusBar.Clear()
+		fmt.Fprint(statusBar, "[yellow]Deleting...[-]")
+		go func() {
+			err := v.client.DeleteAutohold(hold.ID)
+			v.app.QueueUpdateDraw(func() {
+				if err != nil {
+					statusBar.Clear()
+					fmt.Fprintf(statusBar, "[red]Error: %v[-]", err)
+					return
+				}
+				v.closeConfirm()
+				v.Load(v.client)
+			})
+		}()
+	})
+	deleteBtn := form.GetButton(0)
+	deleteBtn.SetBackgroundColor(deleteBg)
+
+	form.AddButton("Cancel", func() {
+		v.closeConfirm()
+	})
+	cancelBtn := form.GetButton(1)
+	cancelBtn.SetBackgroundColor(cancelBg)
+
+	form.SetCancelFunc(func() {
+		v.closeConfirm()
+	})
+
+	focusIdx := 0
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			focusIdx = (focusIdx + 1) % 2
+		case tcell.KeyBacktab:
+			focusIdx = (focusIdx + 1) % 2
+		}
+		if focusIdx == 1 {
+			form.SetButtonActivatedStyle(cancelActiveStyle)
+		} else {
+			form.SetButtonActivatedStyle(deleteActiveStyle)
+		}
+		return event
+	})
+
+	hint := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+	hint.SetBackgroundColor(bg)
+	fmt.Fprint(hint, "[blue]tab[-:-:-][::d]:switch[-:-:-]  [blue]enter[-:-:-][::d]:confirm[-:-:-]  [blue]esc[-:-:-][::d]:cancel[-:-:-]")
+
+	spacer := func() *tview.Box { return tview.NewBox().SetBackgroundColor(bg) }
+
+	inner := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(spacer(), 1, 0, false).
+		AddItem(title, 1, 0, false).
+		AddItem(spacer(), 2, 0, false).
+		AddItem(details, detailRows, 0, false).
+		AddItem(spacer(), 2, 0, false).
+		AddItem(warning, 1, 0, false).
+		AddItem(spacer(), 2, 0, false).
+		AddItem(form, 1, 0, true).
+		AddItem(spacer(), 1, 0, false).
+		AddItem(statusBar, 1, 0, false).
+		AddItem(hint, 1, 0, false).
+		AddItem(spacer(), 1, 0, false)
+	inner.SetBackgroundColor(bg)
+
+	dialogHeight := detailRows + 13
+	dialog := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(spacer(), 0, 1, false).
+		AddItem(tview.NewFlex().
+			AddItem(spacer(), 0, 1, false).
+			AddItem(inner, 65, 0, true).
+			AddItem(spacer(), 0, 1, false),
+			dialogHeight, 0, true).
+		AddItem(spacer(), 0, 1, false)
+	dialog.SetBackgroundColor(bg)
 
 	v.modal = true
-	v.pages.AddAndSwitchToPage("confirm", modal, true)
+	v.pages.AddAndSwitchToPage("confirm", dialog, true)
+	v.app.SetFocus(form)
 }
