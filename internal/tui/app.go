@@ -184,6 +184,10 @@ func (a *App) updateFooterTime() {
 }
 
 func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
+	if mv, ok := a.views[a.nav.Active()].(views.ModalView); ok && mv.IsModal() {
+		return event
+	}
+
 	if a.filterOpen {
 		switch event.Key() {
 		case tcell.KeyEsc:

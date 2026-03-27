@@ -13,6 +13,12 @@ type Provider interface {
 	Validate() error
 }
 
+// TokenProvider can be implemented by auth providers that can obtain
+// a Bearer token for admin write operations (POST/DELETE).
+type TokenProvider interface {
+	BearerToken() string
+}
+
 // HTTPDoer is the interface for making HTTP requests (both http.Client and spnego.Client implement this).
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)

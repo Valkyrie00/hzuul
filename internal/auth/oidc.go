@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -16,11 +17,12 @@ import (
 
 // OIDC implements authentication via OpenID Connect with Keycloak.
 type OIDC struct {
-	client    *http.Client
-	baseURL   string
-	username  string
-	password  string
-	verifySSL bool
+	client      *http.Client
+	baseURL     string
+	username    string
+	password    string
+	verifySSL   bool
+	accessToken string
 }
 
 func NewOIDC(baseURL, username, password string, verifySSL bool, caCert string) (*OIDC, error) {
@@ -55,6 +57,13 @@ func NewOIDC(baseURL, username, password string, verifySSL bool, caCert string) 
 		return nil, fmt.Errorf("OIDC login: %w", err)
 	}
 
+	if token, err := o.acquireToken(); err != nil {
+		slog.Debug("oidc: could not acquire bearer token (admin ops may fail)", "error", err)
+	} else {
+		o.accessToken = token
+		slog.Debug("oidc: acquired bearer token for admin operations")
+	}
+
 	return o, nil
 }
 
@@ -62,8 +71,122 @@ func (o *OIDC) HTTPClient(_ *http.Transport) HTTPDoer {
 	return o.client
 }
 
+func (o *OIDC) BearerToken() string { return o.accessToken }
+
 func (o *OIDC) Validate() error {
 	return nil
+}
+
+func (o *OIDC) acquireToken() (string, error) {
+	// Discover the OIDC auth URL from the initial 302 redirect
+	resp, err := http.Get(o.baseURL + "/api/tenants")
+	if err != nil {
+		// Follow redirects manually to find the OIDC endpoint
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	// Use our already-established session to discover the OIDC config
+	discoverResp, body, err := o.doGet(o.baseURL + "/api/tenants")
+	if err != nil {
+		return "", err
+	}
+	_ = body
+
+	// Find the Keycloak issuer from the initial redirect chain
+	var issuer, clientID string
+	for _, rURL := range discoverResp.Request.Response.Header.Values("Location") {
+		if strings.Contains(rURL, "openid-connect") {
+			if u, err := url.Parse(rURL); err == nil {
+				clientID = u.Query().Get("client_id")
+				issuer = fmt.Sprintf("%s://%s%s", u.Scheme, u.Host,
+					strings.TrimSuffix(u.Path, "/protocol/openid-connect/auth"))
+			}
+			break
+		}
+	}
+
+	// If we couldn't get it from redirect, try the non-authenticated flow
+	if issuer == "" {
+		tlsCfg := &tls.Config{InsecureSkipVerify: !o.verifySSL}
+		noFollowClient := &http.Client{
+			Transport: &http.Transport{TLSClientConfig: tlsCfg},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		rr, err := noFollowClient.Get(o.baseURL + "/api/tenants")
+		if err != nil {
+			return "", fmt.Errorf("discovering OIDC: %w", err)
+		}
+		rr.Body.Close()
+		loc := rr.Header.Get("Location")
+		if u, err := url.Parse(loc); err == nil && strings.Contains(loc, "openid-connect") {
+			clientID = u.Query().Get("client_id")
+			issuer = fmt.Sprintf("%s://%s%s", u.Scheme, u.Host,
+				strings.TrimSuffix(u.Path, "/protocol/openid-connect/auth"))
+		}
+	}
+
+	if issuer == "" || clientID == "" {
+		return "", fmt.Errorf("could not discover OIDC issuer/client_id")
+	}
+
+	// Fetch token endpoint from well-known config
+	wellKnown := issuer + "/.well-known/openid-configuration"
+	wr, wbody, err := o.doGet(wellKnown)
+	if err != nil {
+		return "", fmt.Errorf("fetching OIDC config: %w", err)
+	}
+	_ = wr
+
+	type oidcConfig struct {
+		TokenEndpoint string `json:"token_endpoint"`
+	}
+	var cfg oidcConfig
+	if err := json.Unmarshal([]byte(wbody), &cfg); err != nil {
+		return "", fmt.Errorf("parsing OIDC config: %w", err)
+	}
+	if cfg.TokenEndpoint == "" {
+		return "", fmt.Errorf("no token_endpoint in OIDC config")
+	}
+
+	// Try ROPC grant
+	tokenData := url.Values{
+		"grant_type": {"password"},
+		"client_id":  {clientID},
+		"username":   {o.username},
+		"password":   {o.password},
+		"scope":      {"openid profile roles"},
+	}
+
+	tokenResp, tokenBody, err := o.doPost(cfg.TokenEndpoint, tokenData)
+	if err != nil {
+		return "", fmt.Errorf("token request: %w", err)
+	}
+	if tokenResp.StatusCode >= 400 {
+		return "", fmt.Errorf("token request: %s", tokenBody[:min(200, len(tokenBody))])
+	}
+
+	var tr struct {
+		AccessToken string `json:"access_token"`
+		IDToken     string `json:"id_token"`
+		Error       string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(tokenBody), &tr); err != nil {
+		return "", fmt.Errorf("parsing token: %w", err)
+	}
+	if tr.Error != "" {
+		return "", fmt.Errorf("token error: %s", tr.Error)
+	}
+	if tr.AccessToken != "" {
+		return tr.AccessToken, nil
+	}
+	if tr.IDToken != "" {
+		return tr.IDToken, nil
+	}
+	return "", fmt.Errorf("no token in response")
 }
 
 // login performs the full OIDC authentication flow by following every HTML form

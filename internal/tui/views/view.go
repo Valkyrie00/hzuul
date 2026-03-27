@@ -11,3 +11,9 @@ type View interface {
 	Load(client *api.Client)
 	SetFilter(term string)
 }
+
+// ModalView can be implemented by views that have modal/form overlays
+// that need exclusive keyboard control (bypassing global shortcuts).
+type ModalView interface {
+	IsModal() bool
+}

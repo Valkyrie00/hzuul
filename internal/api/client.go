@@ -16,9 +16,10 @@ import (
 )
 
 type Client struct {
-	doer    auth.HTTPDoer
-	baseURL string
-	tenant  string
+	doer         auth.HTTPDoer
+	authProvider auth.Provider
+	baseURL      string
+	tenant       string
 }
 
 func NewClient(ctx *config.Context) (*Client, error) {
@@ -62,9 +63,10 @@ func NewClient(ctx *config.Context) (*Client, error) {
 	}
 
 	return &Client{
-		doer:    doer,
-		baseURL: strings.TrimRight(ctx.URL, "/"),
-		tenant:  ctx.Tenant,
+		doer:         doer,
+		authProvider: authProvider,
+		baseURL:      strings.TrimRight(ctx.URL, "/"),
+		tenant:       ctx.Tenant,
 	}, nil
 }
 
@@ -135,6 +137,7 @@ func (c *Client) postJSON(path string, body any) error {
 		return fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.setBearerToken(req)
 
 	resp, err := c.doer.Do(req)
 	if err != nil {
@@ -143,6 +146,11 @@ func (c *Client) postJSON(path string, body any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		detail := strings.TrimSpace(string(body))
+		if detail != "" {
+			return fmt.Errorf("POST %s: %s — %s", path, resp.Status, detail)
+		}
 		return fmt.Errorf("POST %s: %s", path, resp.Status)
 	}
 	return nil
@@ -154,6 +162,7 @@ func (c *Client) delete(path string) error {
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
+	c.setBearerToken(req)
 
 	resp, err := c.doer.Do(req)
 	if err != nil {
@@ -165,6 +174,14 @@ func (c *Client) delete(path string) error {
 		return fmt.Errorf("DELETE %s: %s", path, resp.Status)
 	}
 	return nil
+}
+
+func (c *Client) setBearerToken(req *http.Request) {
+	if tp, ok := c.authProvider.(auth.TokenProvider); ok {
+		if token := tp.BearerToken(); token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
 }
 
 func (c *Client) tenantPath(suffix string) string {
