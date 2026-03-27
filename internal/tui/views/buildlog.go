@@ -359,6 +359,9 @@ func wrapText(s string, width int) []string {
 }
 
 func formatBuildDuration(v any) string {
+	if v == nil {
+		return "—"
+	}
 	var secs float64
 	switch d := v.(type) {
 	case float64:
@@ -380,12 +383,12 @@ func formatBuildDuration(v any) string {
 	m := (total % 3600) / 60
 	s := total % 60
 	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+		return fmt.Sprintf("%dh %d min %d secs", h, m, s)
 	}
 	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
+		return fmt.Sprintf("%d min %d secs", m, s)
 	}
-	return fmt.Sprintf("%ds", s)
+	return fmt.Sprintf("%d secs", s)
 }
 
 func resultTag(result string) string {

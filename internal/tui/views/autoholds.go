@@ -102,7 +102,7 @@ func (v *AutoholdsView) Load(client *api.Client) {
 }
 
 func setAutoholdHeader(table *tview.Table) {
-	setTableHeader(table, "ID", "Project", "Job", "Ref Filter", "Count", "Hold for", "Reason")
+	setTableHeader(table, "ID", "Job", "Ref Filter", "Count", "Hold for", "Project", "Reason")
 }
 
 func (v *AutoholdsView) renderTable() {
@@ -115,11 +115,11 @@ func (v *AutoholdsView) renderTable() {
 			continue
 		}
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+h.ID).SetTextColor(tcell.ColorWhite))
-		v.table.SetCell(row, 1, tview.NewTableCell(" "+h.Project).SetTextColor(muted))
-		v.table.SetCell(row, 2, tview.NewTableCell(" "+h.Job).SetTextColor(muted))
-		v.table.SetCell(row, 3, tview.NewTableCell(" "+h.RefFilter).SetTextColor(muted))
-		v.table.SetCell(row, 4, tview.NewTableCell(fmt.Sprintf(" %d/%d", h.CurrentCount, h.MaxCount)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+h.HoldDuration()).SetTextColor(muted))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+h.Job).SetTextColor(muted))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+h.RefFilter).SetTextColor(muted))
+		v.table.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf(" %d/%d", h.CurrentCount, h.MaxCount)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
+		v.table.SetCell(row, 4, tview.NewTableCell(" "+h.HoldDuration()).SetTextColor(muted))
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+h.Project).SetTextColor(muted))
 		v.table.SetCell(row, 6, tview.NewTableCell(" "+h.Reason).SetTextColor(muted).SetExpansion(1))
 		row++
 	}

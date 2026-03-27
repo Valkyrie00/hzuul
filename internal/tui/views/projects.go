@@ -250,7 +250,8 @@ func (v *ProjectsView) showProjectBuilds(p api.Project, header *tview.TextView) 
 				if b.Ref.Change != nil {
 					change = fmt.Sprintf("%v", b.Ref.Change)
 				}
-				v.buildTable.SetCell(row, 0, tview.NewTableCell(" "+b.JobName).SetTextColor(tcell.ColorWhite))
+				rc := resultColor(b.Result)
+				v.buildTable.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(rc))
 				v.buildTable.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted))
 				v.buildTable.SetCell(row, 2, tview.NewTableCell(" "+b.Pipeline).SetTextColor(muted))
 				v.buildTable.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(muted))

@@ -84,12 +84,13 @@ func (v *BuildsetsView) renderTable() {
 			continue
 		}
 
-		v.table.SetCell(row, 0, tview.NewTableCell(" "+bs.Pipeline).SetTextColor(tcell.ColorWhite))
+		rc := resultColor(bs.Result)
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(bs.Result)+" "+bs.Pipeline).SetTextColor(rc))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+projStr).SetTextColor(muted))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+change).SetTextColor(muted))
 		v.table.SetCell(row, 3, resultCell(bs.Result))
 		v.table.SetCell(row, 4, tview.NewTableCell(" "+bs.FirstBuildStart).SetTextColor(dim))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+bs.LastBuildEnd).SetTextColor(dim))
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+bs.LastBuildEnd).SetTextColor(dim).SetExpansion(1))
 		row++
 	}
 	if row == 1 && v.filter != "" {

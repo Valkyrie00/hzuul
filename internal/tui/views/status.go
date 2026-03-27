@@ -432,7 +432,7 @@ func (v *StatusView) rebuildTable() {
 					jobElapsed, _ := jobTimeParts(job, now)
 					resultText := jobResultText(result)
 
-					v.table.SetCell(tableRow, 0, tview.NewTableCell("         "+job.Name+nv).SetTextColor(nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 0, tview.NewTableCell("       "+jobIcon(result)+" "+job.Name+nv).SetTextColor(nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 1, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 2, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetBackgroundColor(jobBg))
@@ -590,15 +590,17 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 func jobResultText(result string) string {
 	switch result {
 	case "SUCCESS":
-		return "[green]SUCCESS[-]"
-	case "FAILURE", "ERROR", "RETRY_LIMIT":
-		return "[red]" + result + "[-]"
-	case "LOST", "ABORTED", "DISK_FULL", "TIMED_OUT":
-		return "[yellow]" + result + "[-]"
+		return "[#48c78e]SUCCESS[-]"
+	case "FAILURE", "ERROR", "NODE_FAILURE":
+		return "[#eb5757]" + result + "[-]"
+	case "RETRY_LIMIT", "LOST", "ABORTED", "DISK_FULL", "TIMED_OUT":
+		return "[#f2c94c]" + result + "[-]"
+	case "SKIPPED":
+		return "[#78788c]SKIPPED[-]"
 	case "running":
-		return "[blue]running[-]"
+		return "[#3884f4]running[-]"
 	default:
-		return "[gray]" + result + "[-]"
+		return "[#78788c]" + result + "[-]"
 	}
 }
 
@@ -693,18 +695,17 @@ func jobSummaryText(running, success, failure, other int) string {
 }
 
 func jobNameColor(result string) tcell.Color {
-	switch result {
-	case "SUCCESS":
-		return tcell.ColorGreen
-	case "FAILURE", "ERROR", "RETRY_LIMIT":
-		return tcell.ColorRed
-	case "LOST", "ABORTED", "DISK_FULL", "TIMED_OUT":
-		return tcell.ColorYellow
-	case "running":
+	if result == "running" {
 		return tcell.NewRGBColor(80, 160, 255)
-	default:
-		return tcell.NewRGBColor(120, 120, 140)
 	}
+	return resultColor(result)
+}
+
+func jobIcon(result string) string {
+	if result == "running" {
+		return "●"
+	}
+	return resultIcon(result)
 }
 
 func jobTimeParts(job api.JobStatus, now time.Time) (elapsed, eta string) {

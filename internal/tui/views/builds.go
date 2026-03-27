@@ -122,7 +122,7 @@ func (v *BuildsView) Load(client *api.Client) {
 		builds, err := client.GetBuilds(&api.BuildFilter{Limit: 50})
 		v.app.QueueUpdateDraw(func() {
 			v.table.Clear()
-			setTableHeader(v.table, "Job", "Project", "Branch", "Pipeline", "Result", "Duration", "Start")
+			setTableHeader(v.table, "Job", "Project", "Branch", "Duration", "Result", "Pipeline", "Change", "Start")
 			if err != nil {
 				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
@@ -135,25 +135,44 @@ func (v *BuildsView) Load(client *api.Client) {
 	}()
 }
 
+func formatChange(ref api.BuildRef) string {
+	if ref.Change == nil {
+		return ""
+	}
+	c := fmt.Sprintf("%v", ref.Change)
+	if c == "<nil>" || c == "" {
+		return ""
+	}
+	if ref.Patchset != nil {
+		p := fmt.Sprintf("%v", ref.Patchset)
+		if p != "" && p != "<nil>" {
+			return c + "," + p
+		}
+	}
+	return c
+}
+
 func (v *BuildsView) renderTable() {
 	v.table.Clear()
-	setTableHeader(v.table, "Job", "Project", "Branch", "Pipeline", "Result", "Duration", "Start")
+	setTableHeader(v.table, "Job", "Project", "Branch", "Duration", "Result", "Pipeline", "Change", "Start")
 	muted := tcell.NewRGBColor(120, 120, 140)
 	dim := tcell.NewRGBColor(90, 90, 110)
 	v.indexMap = nil
 	row := 1
 	for i, b := range v.builds {
-		if !rowMatchesFilter(v.filter, b.JobName, b.Ref.Project, b.Ref.Branch, b.Result) {
+		if !rowMatchesFilter(v.filter, b.JobName, b.Ref.Project, b.Ref.Branch, b.Pipeline, b.Result) {
 			continue
 		}
 		v.indexMap = append(v.indexMap, i)
-		v.table.SetCell(row, 0, tview.NewTableCell(" "+b.JobName).SetTextColor(tcell.ColorWhite))
-		v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(muted))
-		v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted))
-		v.table.SetCell(row, 3, tview.NewTableCell(" ").SetTextColor(muted))
+		rc := resultColor(b.Result)
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(rc))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(muted).SetMaxWidth(45))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted).SetMaxWidth(15))
+		v.table.SetCell(row, 3, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
 		v.table.SetCell(row, 4, resultCell(b.Result))
-		v.table.SetCell(row, 5, tview.NewTableCell(fmt.Sprintf(" %v", b.Duration)).SetTextColor(muted))
-		v.table.SetCell(row, 6, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim))
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+truncate(b.Pipeline, 30)).SetTextColor(muted))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+formatChange(b.Ref)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
+		v.table.SetCell(row, 7, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim).SetExpansion(1))
 		row++
 	}
 	if row == 1 && v.filter != "" {

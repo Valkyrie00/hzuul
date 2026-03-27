@@ -37,17 +37,45 @@ func setTableHeader(table *tview.Table, columns ...string) {
 	}
 }
 
-func resultCell(result string) *tview.TableCell {
-	var color tcell.Color
+func resultColor(result string) tcell.Color {
 	switch result {
 	case "SUCCESS":
-		color = tcell.NewRGBColor(72, 199, 142)
-	case "FAILURE", "ERROR", "RETRY_LIMIT":
-		color = tcell.NewRGBColor(235, 87, 87)
-	case "LOST", "ABORTED", "TIMED_OUT", "DISK_FULL":
-		color = tcell.NewRGBColor(242, 201, 76)
+		return tcell.NewRGBColor(72, 199, 142)
+	case "FAILURE", "ERROR", "NODE_FAILURE":
+		return tcell.NewRGBColor(235, 87, 87)
+	case "RETRY_LIMIT", "LOST", "ABORTED", "TIMED_OUT", "DISK_FULL":
+		return tcell.NewRGBColor(242, 201, 76)
+	case "SKIPPED":
+		return tcell.NewRGBColor(120, 120, 140)
 	default:
-		color = tcell.NewRGBColor(56, 132, 244)
+		return tcell.NewRGBColor(56, 132, 244)
 	}
-	return tview.NewTableCell(" " + result).SetTextColor(color)
+}
+
+func resultCell(result string) *tview.TableCell {
+	display := result
+	if display == "" {
+		display = "running"
+	}
+	return tview.NewTableCell(" " + display).SetTextColor(resultColor(result))
+}
+
+func resultIcon(result string) string {
+	switch result {
+	case "SUCCESS":
+		return "✓"
+	case "FAILURE", "ERROR", "NODE_FAILURE":
+		return "✗"
+	case "SKIPPED":
+		return "–"
+	default:
+		return "●"
+	}
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-1] + "…"
 }
