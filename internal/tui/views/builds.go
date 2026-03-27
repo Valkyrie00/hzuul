@@ -16,8 +16,12 @@ type BuildsView struct {
 	app      *tview.Application
 	client   *api.Client
 	builds   []api.Build
-	indexMap  []int // visible table row index -> original builds slice index
+	indexMap  []int
 	filter   string
+	curFilter api.BuildFilter
+	skip     int
+	loading  bool
+	noMore   bool
 	onDetail bool
 }
 
@@ -75,6 +79,13 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 		return event
 	})
 
+	table.SetSelectionChangedFunc(func(row, _ int) {
+		dataRows := len(v.indexMap)
+		if dataRows > 0 && row >= dataRows && !v.loading && !v.noMore {
+			v.loadMore()
+		}
+	})
+
 	logView.Root().(*tview.Flex).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
 			v.logView.Stop()
@@ -100,8 +111,13 @@ func (v *BuildsView) Root() tview.Primitive { return v.root }
 
 func (v *BuildsView) SetFilter(term string) {
 	v.filter = term
-	v.renderTable()
-	v.table.Select(1, 0)
+	if v.client == nil {
+		return
+	}
+	v.curFilter = parseBuildFilter(term)
+	v.skip = 0
+	v.noMore = false
+	v.searchServer()
 }
 
 func (v *BuildsView) buildIndex(row int) int {
@@ -117,22 +133,79 @@ func (v *BuildsView) Load(client *api.Client) {
 	if v.onDetail {
 		return
 	}
+	if v.filter == "" {
+		v.curFilter = api.BuildFilter{Limit: defaultPageSize}
+	}
+	v.skip = 0
+	v.noMore = false
+	v.searchServer()
+}
+
+func (v *BuildsView) searchServer() {
+	if v.loading || v.client == nil {
+		return
+	}
+	v.loading = true
+	f := v.curFilter
+	f.Skip = 0
+	v.table.Clear()
+	setBuildHeader(v.table)
+	v.table.SetCell(1, 0, tview.NewTableCell(" [yellow]Searching...[-]").SetSelectable(false))
 
 	go func() {
-		builds, err := client.GetBuilds(&api.BuildFilter{Limit: 50})
+		builds, err := v.client.GetBuilds(&f)
 		v.app.QueueUpdateDraw(func() {
+			v.loading = false
 			v.table.Clear()
-			setTableHeader(v.table, "Job", "Project", "Branch", "Duration", "Result", "Pipeline", "Change", "Start")
+			setBuildHeader(v.table)
 			if err != nil {
 				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)))
 				return
 			}
 			v.builds = builds
-			v.renderTable()
+			v.skip = len(builds)
+			v.noMore = len(builds) < defaultPageSize
+			v.renderRows(0)
 			v.table.Select(1, 0)
 			v.table.ScrollToBeginning()
 		})
 	}()
+}
+
+func (v *BuildsView) loadMore() {
+	if v.loading || v.noMore || v.client == nil {
+		return
+	}
+	v.loading = true
+	f := v.curFilter
+	f.Skip = v.skip
+
+	lastRow := v.table.GetRowCount()
+	v.table.SetCell(lastRow, 0, tview.NewTableCell(" [yellow]Loading more...[-]").SetSelectable(false))
+
+	go func() {
+		builds, err := v.client.GetBuilds(&f)
+		v.app.QueueUpdateDraw(func() {
+			v.loading = false
+			v.table.RemoveRow(v.table.GetRowCount() - 1)
+			if err != nil {
+				return
+			}
+			if len(builds) == 0 {
+				v.noMore = true
+				return
+			}
+			startIdx := len(v.builds)
+			v.builds = append(v.builds, builds...)
+			v.skip += len(builds)
+			v.noMore = len(builds) < defaultPageSize
+			v.renderRows(startIdx)
+		})
+	}()
+}
+
+func setBuildHeader(table *tview.Table) {
+	setTableHeader(table, "Job", "Project", "Branch", "Duration", "Result", "Pipeline", "Change", "Start")
 }
 
 func formatChange(ref api.BuildRef) string {
@@ -152,17 +225,15 @@ func formatChange(ref api.BuildRef) string {
 	return c
 }
 
-func (v *BuildsView) renderTable() {
-	v.table.Clear()
-	setTableHeader(v.table, "Job", "Project", "Branch", "Duration", "Result", "Pipeline", "Change", "Start")
+func (v *BuildsView) renderRows(fromIdx int) {
+	if fromIdx == 0 {
+		v.indexMap = nil
+	}
 	muted := tcell.NewRGBColor(120, 120, 140)
 	dim := tcell.NewRGBColor(90, 90, 110)
-	v.indexMap = nil
-	row := 1
-	for i, b := range v.builds {
-		if !rowMatchesFilter(v.filter, b.JobName, b.Ref.Project, b.Ref.Branch, b.Pipeline, b.Result) {
-			continue
-		}
+	row := fromIdx + 1
+	for i := fromIdx; i < len(v.builds); i++ {
+		b := v.builds[i]
 		v.indexMap = append(v.indexMap, i)
 		rc := resultColor(b.Result)
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(rc))
@@ -175,7 +246,7 @@ func (v *BuildsView) renderTable() {
 		v.table.SetCell(row, 7, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim).SetExpansion(1))
 		row++
 	}
-	if row == 1 && v.filter != "" {
-		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetSelectable(false))
+	if len(v.builds) == 0 && v.filter != "" {
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No results for '%s'[-]", v.filter)).SetSelectable(false))
 	}
 }

@@ -21,8 +21,10 @@ type App struct {
 	footer     *tview.Flex
 	footerKeys *tview.TextView
 	footerTime *tview.TextView
-	filterText string
-	filterOpen bool
+	filterText  string
+	filterPos   int
+	filterOpen  bool
+	filterTimer *time.Timer
 	client  *api.Client
 	cfg     *config.Config
 	views   []views.View
@@ -116,12 +118,36 @@ const footerKeysBase = " [blue]?[-:-:-][::d]:help[-:-:-]  [blue]t[-:-:-][::d]:te
 func (a *App) updateFooterKeysText() {
 	a.footerKeys.Clear()
 	if a.filterOpen {
-		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-][::d]█[-]", a.filterText)
+		runes := []rune(a.filterText)
+		before := string(runes[:a.filterPos])
+		after := ""
+		cursor := " "
+		if a.filterPos < len(runes) {
+			cursor = string(runes[a.filterPos])
+			after = string(runes[a.filterPos+1:])
+		}
+		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after)
 	} else if a.filterText != "" {
 		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
 	} else {
 		fmt.Fprint(a.footerKeys, footerKeysBase)
 	}
+}
+
+func (a *App) cancelFilterTimer() {
+	if a.filterTimer != nil {
+		a.filterTimer.Stop()
+		a.filterTimer = nil
+	}
+}
+
+func (a *App) scheduleFilter() {
+	a.cancelFilterTimer()
+	a.filterTimer = time.AfterFunc(500*time.Millisecond, func() {
+		a.app.QueueUpdateDraw(func() {
+			a.applyFilter()
+		})
+	})
 }
 
 func (a *App) applyFilter() {
@@ -147,12 +173,14 @@ func (a *App) switchView(index int) {
 	if index < 0 || index >= len(tabNames) {
 		return
 	}
+	a.cancelFilterTimer()
 	old := a.nav.Active()
 	if old >= 0 && old < len(a.views) {
 		a.views[old].SetFilter("")
 	}
 	a.filterOpen = false
 	a.filterText = ""
+	a.filterPos = 0
 	a.updateFooterKeysText()
 
 	a.pages.SwitchToPage(tabNames[index])
@@ -169,6 +197,9 @@ func (a *App) autoRefresh() {
 		case <-a.stopCh:
 			return
 		case <-ticker.C:
+			if a.filterText != "" {
+				continue
+			}
 			idx := a.nav.Active()
 			a.views[idx].Load(a.client)
 			a.app.QueueUpdateDraw(func() {
@@ -189,28 +220,58 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	if a.filterOpen {
+		runes := []rune(a.filterText)
 		switch event.Key() {
 		case tcell.KeyEsc:
+			a.cancelFilterTimer()
 			a.filterOpen = false
 			a.filterText = ""
+			a.filterPos = 0
 			a.applyFilter()
 			a.updateFooterKeysText()
 			return nil
 		case tcell.KeyEnter:
+			a.cancelFilterTimer()
 			a.filterOpen = false
+			a.applyFilter()
+			a.updateFooterKeysText()
+			return nil
+		case tcell.KeyLeft:
+			if a.filterPos > 0 {
+				a.filterPos--
+				a.updateFooterKeysText()
+			}
+			return nil
+		case tcell.KeyRight:
+			if a.filterPos < len(runes) {
+				a.filterPos++
+				a.updateFooterKeysText()
+			}
+			return nil
+		case tcell.KeyHome:
+			a.filterPos = 0
+			a.updateFooterKeysText()
+			return nil
+		case tcell.KeyEnd:
+			a.filterPos = len(runes)
 			a.updateFooterKeysText()
 			return nil
 		case tcell.KeyBackspace, tcell.KeyBackspace2:
-			if len(a.filterText) > 0 {
-				runes := []rune(a.filterText)
-				a.filterText = string(runes[:len(runes)-1])
-				a.applyFilter()
+			if a.filterPos > 0 {
+				a.filterText = string(append(runes[:a.filterPos-1], runes[a.filterPos:]...))
+				a.filterPos--
+				a.updateFooterKeysText()
+			}
+			return nil
+		case tcell.KeyDelete:
+			if a.filterPos < len(runes) {
+				a.filterText = string(append(runes[:a.filterPos], runes[a.filterPos+1:]...))
 				a.updateFooterKeysText()
 			}
 			return nil
 		case tcell.KeyRune:
-			a.filterText += string(event.Rune())
-			a.applyFilter()
+			a.filterText = string(append(runes[:a.filterPos], append([]rune{event.Rune()}, runes[a.filterPos:]...)...))
+			a.filterPos++
 			a.updateFooterKeysText()
 			return nil
 		}
@@ -238,6 +299,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case '/':
 		a.filterOpen = true
+		a.filterPos = len([]rune(a.filterText))
 		a.updateFooterKeysText()
 		return nil
 	}
@@ -262,7 +324,10 @@ func (a *App) showHelp() {
 
 [blue]Tables[-]
   Up/Down     Navigate rows
-  /           Filter rows (Esc to clear)
+  /           Search (Esc to clear)
+              Builds/Buildsets: server-side
+              job:x  project:x  pipeline:x
+              branch:x  result:x  change:x
 
 [blue]General[-]
   ?           This help

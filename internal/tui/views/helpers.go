@@ -5,6 +5,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/vcastell/hzuul/internal/api"
 )
 
 var (
@@ -78,4 +79,72 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-1] + "…"
+}
+
+const defaultPageSize = 50
+
+func parseBuildFilter(text string) api.BuildFilter {
+	f := api.BuildFilter{Limit: defaultPageSize}
+	if text == "" {
+		return f
+	}
+	if idx := strings.Index(text, ":"); idx > 0 {
+		prefix := strings.ToLower(text[:idx])
+		value := strings.TrimSpace(text[idx+1:])
+		switch prefix {
+		case "job":
+			f.JobName = value
+		case "project":
+			f.Project = value
+		case "pipeline":
+			f.Pipeline = value
+		case "branch":
+			f.Branch = value
+		case "result":
+			f.Result = value
+		case "change":
+			f.Change = value
+		default:
+			f.JobName = text
+		}
+		return f
+	}
+	if strings.Contains(text, "/") {
+		f.Project = text
+	} else {
+		f.JobName = text
+	}
+	return f
+}
+
+func parseBuildsetFilter(text string) api.BuildFilter {
+	f := api.BuildFilter{Limit: defaultPageSize}
+	if text == "" {
+		return f
+	}
+	if idx := strings.Index(text, ":"); idx > 0 {
+		prefix := strings.ToLower(text[:idx])
+		value := strings.TrimSpace(text[idx+1:])
+		switch prefix {
+		case "project":
+			f.Project = value
+		case "pipeline":
+			f.Pipeline = value
+		case "branch":
+			f.Branch = value
+		case "result":
+			f.Result = value
+		case "change":
+			f.Change = value
+		default:
+			f.Pipeline = text
+		}
+		return f
+	}
+	if strings.Contains(text, "/") {
+		f.Project = text
+	} else {
+		f.Pipeline = text
+	}
+	return f
 }
