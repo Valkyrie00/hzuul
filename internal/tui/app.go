@@ -43,17 +43,17 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("creating API client: %w", err)
 	}
 
-	tview.Styles.PrimitiveBackgroundColor = views.ColorBg
-	tview.Styles.ContrastBackgroundColor = views.ColorNavBg
-	tview.Styles.MoreContrastBackgroundColor = views.ColorNavBg
-	tview.Styles.BorderColor = views.ColorSep
-	tview.Styles.TitleColor = tcell.ColorWhite
-	tview.Styles.GraphicsColor = views.ColorSep
-	tview.Styles.PrimaryTextColor = tcell.ColorWhite
-	tview.Styles.SecondaryTextColor = views.ColorMuted
-	tview.Styles.TertiaryTextColor = views.ColorDim
-	tview.Styles.InverseTextColor = views.ColorBg
-	tview.Styles.ContrastSecondaryTextColor = views.ColorAccent
+	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
+	tview.Styles.ContrastBackgroundColor = tcell.ColorDefault
+	tview.Styles.MoreContrastBackgroundColor = tcell.ColorDefault
+	tview.Styles.BorderColor = tcell.ColorDefault
+	tview.Styles.TitleColor = tcell.ColorDefault
+	tview.Styles.GraphicsColor = tcell.ColorDefault
+	tview.Styles.PrimaryTextColor = tcell.ColorDefault
+	tview.Styles.SecondaryTextColor = tcell.ColorDefault
+	tview.Styles.TertiaryTextColor = tcell.ColorDefault
+	tview.Styles.InverseTextColor = tcell.ColorDefault
+	tview.Styles.ContrastSecondaryTextColor = tcell.ColorDefault
 
 	a := &App{
 		app:             tview.NewApplication(),
@@ -63,12 +63,6 @@ func New(cfg *config.Config) (*App, error) {
 		stopCh:          make(chan struct{}),
 		refreshInterval: defaultRefreshInterval,
 	}
-
-	bgStyle := tcell.StyleDefault.Background(views.ColorBg)
-	a.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		screen.Fill(' ', bgStyle)
-		return false
-	})
 
 	a.header = a.buildHeader(ctx)
 	a.buildFooter()
@@ -327,44 +321,39 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 }
 
 func (a *App) showHelp() {
-	helpText := `[bold]hZuul Keybindings[-]
+	helpText := ` [::b]Keybindings[-:-:-]
 
-[#3884f4]Navigation[-]
-  1-9         Switch to view
-  Tab         Next view
-  Shift+Tab   Previous view
+ [#3884f4]Navigation[-:-:-]
+   1-9         Switch to view
+   Tab         Next view
+   Shift+Tab   Previous view
 
-[#3884f4]Actions[-]
-  r           Refresh current view
-  t           Change tenant
-  Enter       Open detail (in tables)
-  l           Stream log (in Builds)
-  q / Esc     Quit / Back
+ [#3884f4]Actions[-:-:-]
+   r           Refresh current view
+   t           Change tenant
+   Enter       Open detail (in tables)
+   l           Stream log (in Builds)
+   q / Esc     Quit / Back
 
-[#3884f4]Tables[-]
-  Up/Down     Navigate rows
-  /           Search (Esc to clear)
-              Builds/Buildsets: server-side
-              job:x  project:x  pipeline:x
-              branch:x  result:x  change:x
+ [#3884f4]Tables[-:-:-]
+   Up/Down     Navigate rows
+   /           Search (Esc to clear)
+               Builds/Buildsets: server-side
+               job:x  project:x  pipeline:x
+               branch:x  result:x  change:x
 
-[#3884f4]General[-]
-  ?           This help
-  q           Quit application
-
-[::d]Auto-refresh: every 30 seconds[-]`
+ [#78788c]Auto-refresh: every 30 seconds[-:-:-]`
 
 	modal := tview.NewTextView().
 		SetDynamicColors(true).
 		SetText(helpText)
-	modal.SetBackgroundColor(ColorBg)
 	modal.SetBorder(true).
 		SetTitle(" Help ").
-		SetBorderColor(ColorAccent)
+		SetBorderColor(views.ColorSep)
 
 	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc || event.Key() == tcell.KeyEnter {
-			a.pages.RemovePage("help")
+			a.dismissModal("help")
 			return nil
 		}
 		return event
@@ -384,34 +373,48 @@ func (a *App) showTenantPicker() {
 		}
 
 		a.app.QueueUpdateDraw(func() {
+			selectBg := tcell.NewRGBColor(50, 52, 70)
+
 			list := tview.NewList()
 			list.SetTitle(" Select Tenant ").SetBorder(true)
-			list.SetBackgroundColor(ColorBg)
-			list.SetBorderColor(ColorAccent)
+			list.SetBorderColor(views.ColorSep)
 			list.SetMainTextColor(tcell.ColorWhite)
+			list.SetSecondaryTextColor(views.ColorMuted)
+			list.SetSelectedTextColor(tcell.ColorWhite)
+			list.SetSelectedBackgroundColor(selectBg)
+			list.SetHighlightFullLine(true)
+			list.ShowSecondaryText(false)
 
-			for _, t := range tenants {
+			currentTenant := a.client.Tenant()
+
+			for i, t := range tenants {
 				name := t.Name
-				list.AddItem(name, "", 0, func() {
+				prefix := "  "
+				if name == currentTenant {
+					prefix = "● "
+					list.SetCurrentItem(i)
+				}
+				list.AddItem(prefix+name, "", 0, func() {
 					a.client.SetTenant(name)
 					a.header.Clear()
 					ctx, _ := a.cfg.Active()
 					fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]│[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
 						ctx.URL, name, a.cfg.CurrentContext)
-					a.pages.RemovePage("tenants")
-					a.views[a.nav.Active()].Load(a.client)
+					a.dismissModal("tenants")
+					idx := a.nav.Active()
+					a.views[idx].Load(a.client)
 				})
 			}
 
 			list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 				if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-					a.pages.RemovePage("tenants")
+					a.dismissModal("tenants")
 					return nil
 				}
 				return event
 			})
 
-			height := len(tenants) + 2
+			height := len(tenants)*2 + 2
 			if height > 20 {
 				height = 20
 			}
@@ -423,56 +426,51 @@ func (a *App) showTenantPicker() {
 func (a *App) showError(context string, err error) {
 	text := tview.NewTextView().
 		SetDynamicColors(true).
-		SetText(fmt.Sprintf("[red][bold]Error: %s[-][-]\n\n%v", context, err))
-	text.SetBackgroundColor(ColorBg)
+		SetText(fmt.Sprintf("\n [#eb5757::b]Error: %s[-:-:-]\n\n [#78788c]%v[-:-:-]\n\n [#78788c]Press [white]q[-:-:-][#78788c] or [white]Esc[-:-:-][#78788c] to close[-:-:-]", context, err))
 	text.SetBorder(true).
 		SetTitle(" Error ").
-		SetBorderColor(ColorFailure)
+		SetBorderColor(views.ColorSep)
 	text.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc || event.Key() == tcell.KeyEnter {
-			a.pages.RemovePage("error")
+			a.dismissModal("error")
 			return nil
 		}
 		return event
 	})
-	a.pages.AddAndSwitchToPage("error", center(text, 60, 8), true)
+	a.pages.AddAndSwitchToPage("error", center(text, 60, 10), true)
 }
 
 func (a *App) showQuitConfirm() {
-	cardBg := tcell.NewRGBColor(30, 30, 42)
-	headerBg := tcell.NewRGBColor(38, 38, 52)
+	modal := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter).
+		SetText("\n\n [::b]Quit HZUUL?[-:-:-]\n\n [#78788c]Press[-:-:-] [#48c78e::b]y[-:-:-] [#78788c]to confirm or[-:-:-] [#eb5757::b]n[-:-:-][#78788c]/[-:-:-][white]Esc[-:-:-] [#78788c]to cancel[-:-:-]")
+	modal.SetBorder(true).
+		SetTitle(" Quit ").
+		SetBorderColor(views.ColorSep)
 
-	title := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
-	title.SetBackgroundColor(headerBg)
-	fmt.Fprint(title, "\n [::b]Quit HZUUL[-:-:-]")
-
-	body := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
-	body.SetBackgroundColor(cardBg)
-	fmt.Fprint(body, "\n[#78788c]Are you sure you want to quit?[-:-:-]\n\n[#48c78e::b] y [-:-:-] [#78788c]confirm[-:-:-]    [#eb5757::b] n [-:-:-] [#78788c]cancel[-:-:-]")
-
-	card := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(title, 3, 0, false).
-		AddItem(body, 0, 1, true)
-	card.SetBackgroundColor(cardBg)
-	card.SetBorder(true).SetBorderColor(tcell.NewRGBColor(50, 50, 65))
-
-	card.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
 		case 'y', 'Y':
 			a.app.Stop()
 			return nil
 		case 'n', 'N', 'q':
-			a.pages.RemovePage("quit")
+			a.dismissModal("quit")
 			return nil
 		}
 		if event.Key() == tcell.KeyEsc {
-			a.pages.RemovePage("quit")
+			a.dismissModal("quit")
 			return nil
 		}
 		return event
 	})
 
-	a.pages.AddAndSwitchToPage("quit", center(card, 42, 10), true)
+	a.pages.AddAndSwitchToPage("quit", center(modal, 46, 8), true)
+}
+
+func (a *App) dismissModal(name string) {
+	a.pages.RemovePage(name)
+	a.pages.SwitchToPage(tabNames[a.nav.Active()])
 }
 
 func center(p tview.Primitive, width, height int) tview.Primitive {

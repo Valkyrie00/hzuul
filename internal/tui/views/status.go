@@ -284,8 +284,8 @@ func (v *StatusView) rebuildTable() {
 	v.setStatusHeader()
 	v.rowMap = make(map[int]rowEntry)
 
-	sectionBg := ColorSectionBg
-	jobBg := ColorJobBg
+	sectionBg := ColorBg
+	jobBg := ColorBg
 	muted := ColorMuted
 	sectionColor := tcell.NewRGBColor(230, 185, 90)
 	now := time.Now()
