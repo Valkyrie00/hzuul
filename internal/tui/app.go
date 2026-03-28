@@ -43,6 +43,18 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("creating API client: %w", err)
 	}
 
+	tview.Styles.PrimitiveBackgroundColor = views.ColorBg
+	tview.Styles.ContrastBackgroundColor = views.ColorNavBg
+	tview.Styles.MoreContrastBackgroundColor = views.ColorNavBg
+	tview.Styles.BorderColor = views.ColorSep
+	tview.Styles.TitleColor = tcell.ColorWhite
+	tview.Styles.GraphicsColor = views.ColorSep
+	tview.Styles.PrimaryTextColor = tcell.ColorWhite
+	tview.Styles.SecondaryTextColor = views.ColorMuted
+	tview.Styles.TertiaryTextColor = views.ColorDim
+	tview.Styles.InverseTextColor = views.ColorBg
+	tview.Styles.ContrastSecondaryTextColor = views.ColorAccent
+
 	a := &App{
 		app:             tview.NewApplication(),
 		pages:           tview.NewPages(),
@@ -51,6 +63,12 @@ func New(cfg *config.Config) (*App, error) {
 		stopCh:          make(chan struct{}),
 		refreshInterval: defaultRefreshInterval,
 	}
+
+	bgStyle := tcell.StyleDefault.Background(views.ColorBg)
+	a.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		screen.Fill(' ', bgStyle)
+		return false
+	})
 
 	a.header = a.buildHeader(ctx)
 	a.buildFooter()
@@ -61,7 +79,7 @@ func New(cfg *config.Config) (*App, error) {
 		a.pages.AddPage(tabNames[i], v.Root(), true, i == 0)
 	}
 
-	navSpacer := tview.NewBox().SetBackgroundColor(ColorBg)
+	navSpacer := tview.NewBox()
 
 	layout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(a.header, 1, 0, false).
@@ -111,6 +129,7 @@ func (a *App) buildFooter() {
 	a.footer = tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(keys, 0, 1, false).
 		AddItem(ts, 22, 0, false)
+	a.footer.SetBackgroundColor(ColorNavBg)
 }
 
 const footerKeysBase = " [#3884f4]?[-:-:-][::d]:help[-:-:-]  [#3884f4]t[-:-:-][::d]:tenant[-:-:-]  [#3884f4]r[-:-:-][::d]:refresh[-:-:-]  [#3884f4]1-9[-:-:-][::d]:views[-:-:-]  [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]q[-:-:-][::d]:quit[-:-:-]"
@@ -420,16 +439,24 @@ func (a *App) showError(context string, err error) {
 }
 
 func (a *App) showQuitConfirm() {
-	modal := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter).
-		SetText("\n\n[bold]Quit HZUUL?[-]\n\n[::d]Press [white]y[-:-:-] to confirm or [white]n[-:-:-]/[white]Esc[-:-:-] to cancel[-:-:-]")
-	modal.SetBackgroundColor(ColorBg)
-	modal.SetBorder(true).
-		SetTitle(" Quit ").
-		SetBorderColor(ColorAccent)
+	cardBg := tcell.NewRGBColor(30, 30, 42)
+	headerBg := tcell.NewRGBColor(38, 38, 52)
 
-	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	title := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+	title.SetBackgroundColor(headerBg)
+	fmt.Fprint(title, "\n [::b]Quit HZUUL[-:-:-]")
+
+	body := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+	body.SetBackgroundColor(cardBg)
+	fmt.Fprint(body, "\n[#78788c]Are you sure you want to quit?[-:-:-]\n\n[#48c78e::b] y [-:-:-] [#78788c]confirm[-:-:-]    [#eb5757::b] n [-:-:-] [#78788c]cancel[-:-:-]")
+
+	card := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(title, 3, 0, false).
+		AddItem(body, 0, 1, true)
+	card.SetBackgroundColor(cardBg)
+	card.SetBorder(true).SetBorderColor(tcell.NewRGBColor(50, 50, 65))
+
+	card.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
 		case 'y', 'Y':
 			a.app.Stop()
@@ -445,7 +472,7 @@ func (a *App) showQuitConfirm() {
 		return event
 	})
 
-	a.pages.AddAndSwitchToPage("quit", center(modal, 40, 8), true)
+	a.pages.AddAndSwitchToPage("quit", center(card, 42, 10), true)
 }
 
 func center(p tview.Primitive, width, height int) tview.Primitive {
