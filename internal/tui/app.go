@@ -113,7 +113,7 @@ func (a *App) buildFooter() {
 		AddItem(ts, 22, 0, false)
 }
 
-const footerKeysBase = " [blue]?[-:-:-][::d]:help[-:-:-]  [blue]t[-:-:-][::d]:tenant[-:-:-]  [blue]r[-:-:-][::d]:refresh[-:-:-]  [blue]1-9[-:-:-][::d]:views[-:-:-]  [blue]/[-:-:-][::d]:filter[-:-:-]  [blue]q[-:-:-][::d]:quit[-:-:-]"
+const footerKeysBase = " [#3884f4]?[-:-:-][::d]:help[-:-:-]  [#3884f4]t[-:-:-][::d]:tenant[-:-:-]  [#3884f4]r[-:-:-][::d]:refresh[-:-:-]  [#3884f4]1-9[-:-:-][::d]:views[-:-:-]  [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]q[-:-:-][::d]:quit[-:-:-]"
 
 func (a *App) updateFooterKeysText() {
 	a.footerKeys.Clear()
@@ -126,9 +126,9 @@ func (a *App) updateFooterKeysText() {
 			cursor = string(runes[a.filterPos])
 			after = string(runes[a.filterPos+1:])
 		}
-		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after)
+		fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after)
 	} else if a.filterText != "" {
-		fmt.Fprintf(a.footerKeys, " [blue]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
+		fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
 	} else {
 		fmt.Fprint(a.footerKeys, footerKeysBase)
 	}
@@ -284,7 +284,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 
 	switch event.Rune() {
 	case 'q':
-		a.app.Stop()
+		a.showQuitConfirm()
 		return nil
 	case 'r':
 		idx := a.nav.Active()
@@ -310,26 +310,26 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 func (a *App) showHelp() {
 	helpText := `[bold]hZuul Keybindings[-]
 
-[blue]Navigation[-]
+[#3884f4]Navigation[-]
   1-9         Switch to view
   Tab         Next view
   Shift+Tab   Previous view
 
-[blue]Actions[-]
+[#3884f4]Actions[-]
   r           Refresh current view
   t           Change tenant
   Enter       Open detail (in tables)
   l           Stream log (in Builds)
   q / Esc     Quit / Back
 
-[blue]Tables[-]
+[#3884f4]Tables[-]
   Up/Down     Navigate rows
   /           Search (Esc to clear)
               Builds/Buildsets: server-side
               job:x  project:x  pipeline:x
               branch:x  result:x  change:x
 
-[blue]General[-]
+[#3884f4]General[-]
   ?           This help
   q           Quit application
 
@@ -417,6 +417,35 @@ func (a *App) showError(context string, err error) {
 		return event
 	})
 	a.pages.AddAndSwitchToPage("error", center(text, 60, 8), true)
+}
+
+func (a *App) showQuitConfirm() {
+	modal := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter).
+		SetText("\n\n[bold]Quit HZUUL?[-]\n\n[::d]Press [white]y[-:-:-] to confirm or [white]n[-:-:-]/[white]Esc[-:-:-] to cancel[-:-:-]")
+	modal.SetBackgroundColor(ColorBg)
+	modal.SetBorder(true).
+		SetTitle(" Quit ").
+		SetBorderColor(ColorAccent)
+
+	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'y', 'Y':
+			a.app.Stop()
+			return nil
+		case 'n', 'N', 'q':
+			a.pages.RemovePage("quit")
+			return nil
+		}
+		if event.Key() == tcell.KeyEsc {
+			a.pages.RemovePage("quit")
+			return nil
+		}
+		return event
+	})
+
+	a.pages.AddAndSwitchToPage("quit", center(modal, 40, 8), true)
 }
 
 func center(p tview.Primitive, width, height int) tview.Primitive {

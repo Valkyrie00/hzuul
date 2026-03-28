@@ -1,7 +1,9 @@
 package views
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -9,8 +11,8 @@ import (
 )
 
 var (
-	colorTableHeader = tcell.NewRGBColor(56, 132, 244)
-	colorSeparator   = tcell.NewRGBColor(50, 50, 65)
+	colorTableHeader = ColorAccent
+	colorSeparator   = ColorSep
 )
 
 func rowMatchesFilter(filter string, fields ...string) bool {
@@ -72,6 +74,38 @@ func resultIcon(result string) string {
 	default:
 		return "●"
 	}
+}
+
+func formatTimestamp(ts string) string {
+	if ts == "" {
+		return "—"
+	}
+	for _, layout := range []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05.000000",
+	} {
+		if t, err := time.Parse(layout, ts); err == nil {
+			now := time.Now()
+			diff := now.Sub(t)
+			switch {
+			case diff < time.Minute:
+				return "just now"
+			case diff < time.Hour:
+				return fmt.Sprintf("%dm ago", int(diff.Minutes()))
+			case diff < 24*time.Hour:
+				return fmt.Sprintf("%dh %dm ago", int(diff.Hours()), int(diff.Minutes())%60)
+			case diff < 7*24*time.Hour:
+				return t.Format("Mon 15:04")
+			default:
+				return t.Format("02 Jan 15:04")
+			}
+		}
+	}
+	if len(ts) > 16 {
+		return ts[:16]
+	}
+	return ts
 }
 
 func truncate(s string, max int) string {

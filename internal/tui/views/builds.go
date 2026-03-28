@@ -9,15 +9,16 @@ import (
 )
 
 type BuildsView struct {
-	root     *tview.Flex
-	table    *tview.Table
-	logView  *BuildLogView
-	pages    *tview.Pages
-	app      *tview.Application
-	client   *api.Client
-	builds   []api.Build
-	indexMap  []int
-	filter   string
+	root       *tview.Flex
+	table      *tview.Table
+	countLabel *tview.TextView
+	logView    *BuildLogView
+	pages      *tview.Pages
+	app        *tview.Application
+	client     *api.Client
+	builds     []api.Build
+	indexMap    []int
+	filter     string
 	curFilter api.BuildFilter
 	skip     int
 	loading  bool
@@ -29,28 +30,43 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
-	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
-	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	table.SetBackgroundColor(ColorBg)
+	table.SetSelectedStyle(SelectedStyle)
+
+	countLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
+	countLabel.SetBackgroundColor(ColorBg)
+
+	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
+	keys.SetBackgroundColor(ColorNavBg)
+
+	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(keys, 0, 1, false).
+		AddItem(countLabel, 20, 0, false)
+	keysRow.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]l[-:-:-][::d]:stream log[-:-:-]  [#3884f4]/[-:-:-][::d]:search[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+
+	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(table, 0, 1, true).
+		AddItem(keysRow, 1, 0, false)
+	tableWithKeys.SetBackgroundColor(ColorBg)
 
 	logView := NewBuildLogView(app)
 
 	pages := tview.NewPages().
-		AddPage("table", table, true, true).
+		AddPage("table", tableWithKeys, true, true).
 		AddPage("detail", logView.Root(), true, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(pages, 0, 1, true)
-	root.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+	root.SetBackgroundColor(ColorBg)
 
 	v := &BuildsView{
-		root:    root,
-		table:   table,
-		logView: logView,
-		pages:   pages,
-		app:     app,
+		root:       root,
+		table:      table,
+		countLabel: countLabel,
+		logView:    logView,
+		pages:      pages,
+		app:        app,
 	}
 
 	table.SetSelectedFunc(func(row, _ int) {
@@ -86,22 +102,9 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 		}
 	})
 
-	logView.Root().(*tview.Flex).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-			v.logView.Stop()
-			v.pages.SwitchToPage("table")
-			v.onDetail = false
-			return nil
-		}
-		if event.Rune() == 'o' && v.logView.openURL != "" {
-			openURL(v.logView.openURL)
-			return nil
-		}
-		if event.Rune() == 'l' && v.logView.logURL != "" {
-			openURL(v.logView.logURL)
-			return nil
-		}
-		return event
+	logView.SetBackHandler(func() {
+		v.pages.SwitchToPage("table")
+		v.onDetail = false
 	})
 
 	return v
@@ -148,9 +151,7 @@ func (v *BuildsView) searchServer() {
 	v.loading = true
 	f := v.curFilter
 	f.Skip = 0
-	v.table.Clear()
-	setBuildHeader(v.table)
-	v.table.SetCell(1, 0, tview.NewTableCell(" [yellow]Searching...[-]").SetSelectable(false))
+	firstLoad := len(v.builds) == 0
 
 	go func() {
 		builds, err := v.client.GetBuilds(&f)
@@ -166,10 +167,22 @@ func (v *BuildsView) searchServer() {
 			v.skip = len(builds)
 			v.noMore = len(builds) < defaultPageSize
 			v.renderRows(0)
-			v.table.Select(1, 0)
-			v.table.ScrollToBeginning()
+			v.updateCount()
+			if firstLoad {
+				v.table.Select(1, 0)
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
+}
+
+func (v *BuildsView) updateCount() {
+	v.countLabel.Clear()
+	suffix := ""
+	if !v.noMore {
+		suffix = "+"
+	}
+	fmt.Fprintf(v.countLabel, "[::d]%d%s items [-]", len(v.builds), suffix)
 }
 
 func (v *BuildsView) loadMore() {
@@ -200,6 +213,7 @@ func (v *BuildsView) loadMore() {
 			v.skip += len(builds)
 			v.noMore = len(builds) < defaultPageSize
 			v.renderRows(startIdx)
+			v.updateCount()
 		})
 	}()
 }
@@ -229,21 +243,21 @@ func (v *BuildsView) renderRows(fromIdx int) {
 	if fromIdx == 0 {
 		v.indexMap = nil
 	}
-	muted := tcell.NewRGBColor(120, 120, 140)
-	dim := tcell.NewRGBColor(90, 90, 110)
+	muted := ColorMuted
+	dim := ColorDim
 	row := fromIdx + 1
 	for i := fromIdx; i < len(v.builds); i++ {
 		b := v.builds[i]
 		v.indexMap = append(v.indexMap, i)
 		rc := resultColor(b.Result)
-		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(rc))
+		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(rc).SetExpansion(1))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(muted).SetMaxWidth(45))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted).SetMaxWidth(15))
 		v.table.SetCell(row, 3, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
 		v.table.SetCell(row, 4, resultCell(b.Result))
 		v.table.SetCell(row, 5, tview.NewTableCell(" "+truncate(b.Pipeline, 30)).SetTextColor(muted))
-		v.table.SetCell(row, 6, tview.NewTableCell(" "+formatChange(b.Ref)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
-		v.table.SetCell(row, 7, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim).SetExpansion(1))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+formatChange(b.Ref)).SetTextColor(ColorAccent))
+		v.table.SetCell(row, 7, tview.NewTableCell(" "+formatTimestamp(b.StartTime)).SetTextColor(dim))
 		row++
 	}
 	if len(v.builds) == 0 && v.filter != "" {

@@ -27,8 +27,8 @@ type BuildLogView struct {
 }
 
 func NewBuildLogView(app *tview.Application) *BuildLogView {
-	bg := tcell.NewRGBColor(24, 24, 32)
-	dimColor := tcell.NewRGBColor(50, 50, 65)
+	bg := ColorBg
+	dimColor := ColorSep
 
 	header := tview.NewTextView().
 		SetDynamicColors(true).
@@ -50,12 +50,12 @@ func NewBuildLogView(app *tview.Application) *BuildLogView {
 	textView.SetBackgroundColor(bg)
 	textView.SetBorderPadding(0, 0, 2, 2)
 
-	navBg := tcell.NewRGBColor(32, 32, 44)
+	navBg := ColorNavBg
 	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [blue]esc[-:-:-][::d]:back[-:-:-]  [blue]o[-:-:-][::d]:open web[-:-:-]  [blue]l[-:-:-][::d]:open logs[-:-:-]  [blue]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
@@ -76,13 +76,32 @@ func (v *BuildLogView) Root() tview.Primitive { return v.root }
 
 func (v *BuildLogView) Load(_ *api.Client) {}
 
+func (v *BuildLogView) SetBackHandler(onBack func()) {
+	v.root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
+			v.Stop()
+			onBack()
+			return nil
+		}
+		if event.Rune() == 'o' && v.openURL != "" {
+			openURL(v.openURL)
+			return nil
+		}
+		if event.Rune() == 'l' && v.logURL != "" {
+			openURL(v.logURL)
+			return nil
+		}
+		return event
+	})
+}
+
 func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.Stop()
 	v.logURL = build.LogURL
 	v.openURL = build.LogURL
 
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Log[-] │ [blue]%s[-] │ %s │ %s",
+	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s",
 		build.JobName, build.Ref.Project, build.Ref.Branch)
 
 	v.textView.Clear()
@@ -172,7 +191,7 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 		v.openURL = build.LogURL
 	}
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [blue]%s[-] │ %s │ %s",
+	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ %s",
 		build.JobName, build.Ref.Project, build.Ref.Branch)
 
 	thinLine := "────────────────────────────────────────────────────────────────────────────────"
@@ -250,9 +269,9 @@ func (v *BuildLogView) fetchTaskSummary(client *api.Client, logURL string) {
 		thickLine := "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 		if len(stats) > 0 {
-			fmt.Fprintf(v.textView, "\n[blue]%s[-]\n", thickLine)
-			fmt.Fprintf(v.textView, "[bold][blue]  Task Summary[-]\n")
-			fmt.Fprintf(v.textView, "[blue]%s[-]\n\n", thickLine)
+			fmt.Fprintf(v.textView, "\n[#3884f4]%s[-]\n", thickLine)
+			fmt.Fprintf(v.textView, "[bold][#3884f4]  Task Summary[-]\n")
+			fmt.Fprintf(v.textView, "[#3884f4]%s[-]\n\n", thickLine)
 
 			nameW := 4
 			for host := range stats {
@@ -400,7 +419,7 @@ func resultTag(result string) string {
 	case "LOST", "ABORTED", "TIMED_OUT":
 		return "[yellow]" + result + "[-]"
 	default:
-		return "[blue]" + result + "[-]"
+		return "[#3884f4]" + result + "[-]"
 	}
 }
 

@@ -24,32 +24,27 @@ type AutoholdsView struct {
 func (v *AutoholdsView) IsModal() bool { return v.modal }
 
 func NewAutoholdsView(app *tview.Application) *AutoholdsView {
-	bg := tcell.NewRGBColor(24, 24, 32)
-
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
-	table.SetBackgroundColor(bg)
-	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	table.SetBackgroundColor(ColorBg)
+	table.SetSelectedStyle(SelectedStyle)
 
 	keys := tview.NewTextView().SetDynamicColors(true)
-	keys.SetBackgroundColor(bg)
-	fmt.Fprint(keys, " [blue]c[-:-:-][::d]:create[-:-:-]  [blue]d[-:-:-][::d]:delete[-:-:-]  [blue]enter[-:-:-][::d]:detail[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	keys.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
 		AddItem(keys, 1, 0, false)
-	tablePage.SetBackgroundColor(bg)
+	tablePage.SetBackgroundColor(ColorBg)
 
 	pages := tview.NewPages().
 		AddPage("table", tablePage, true, true)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(pages, 0, 1, true)
-	root.SetBackgroundColor(bg)
+	root.SetBackgroundColor(ColorBg)
 
 	v := &AutoholdsView{
 		root:  root,
@@ -84,6 +79,8 @@ func (v *AutoholdsView) SetFilter(term string) {
 
 func (v *AutoholdsView) Load(client *api.Client) {
 	v.client = client
+	firstLoad := len(v.holds) == 0
+
 	go func() {
 		holds, err := client.GetAutoholds()
 		v.app.QueueUpdateDraw(func() {
@@ -95,8 +92,10 @@ func (v *AutoholdsView) Load(client *api.Client) {
 			}
 			v.holds = holds
 			v.renderTable()
-			v.table.Select(1, 0)
-			v.table.ScrollToBeginning()
+			if firstLoad {
+				v.table.Select(1, 0)
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
 }
@@ -108,19 +107,19 @@ func setAutoholdHeader(table *tview.Table) {
 func (v *AutoholdsView) renderTable() {
 	v.table.Clear()
 	setAutoholdHeader(v.table)
-	muted := tcell.NewRGBColor(120, 120, 140)
+	muted := ColorMuted
 	row := 1
 	for _, h := range v.holds {
 		if !rowMatchesFilter(v.filter, h.ID, h.Project, h.Job, h.RefFilter, h.Reason) {
 			continue
 		}
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+h.ID).SetTextColor(tcell.ColorWhite))
-		v.table.SetCell(row, 1, tview.NewTableCell(" "+h.Job).SetTextColor(muted))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+h.Job).SetTextColor(muted).SetExpansion(1))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+h.RefFilter).SetTextColor(muted))
-		v.table.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf(" %d/%d", h.CurrentCount, h.MaxCount)).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
+		v.table.SetCell(row, 3, tview.NewTableCell(fmt.Sprintf(" %d/%d", h.CurrentCount, h.MaxCount)).SetTextColor(ColorAccent))
 		v.table.SetCell(row, 4, tview.NewTableCell(" "+h.HoldDuration()).SetTextColor(muted))
 		v.table.SetCell(row, 5, tview.NewTableCell(" "+h.Project).SetTextColor(muted))
-		v.table.SetCell(row, 6, tview.NewTableCell(" "+h.Reason).SetTextColor(muted).SetExpansion(1))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+h.Reason).SetTextColor(muted))
 		row++
 	}
 	if row == 1 {
@@ -140,9 +139,9 @@ func (v *AutoholdsView) closeForm() {
 }
 
 func (v *AutoholdsView) showCreateForm() {
-	bg := tcell.NewRGBColor(24, 24, 32)
+	bg := ColorBg
 	fieldBg := tcell.NewRGBColor(40, 40, 55)
-	labelColor := tcell.NewRGBColor(56, 132, 244)
+	labelColor := ColorAccent
 	btnBg := tcell.NewRGBColor(56, 132, 244)
 	btnActiveBg := tcell.NewRGBColor(72, 199, 142)
 	cancelBg := tcell.NewRGBColor(200, 50, 50)
@@ -270,7 +269,7 @@ func (v *AutoholdsView) showCreateForm() {
 
 	hint := tview.NewTextView().SetDynamicColors(true)
 	hint.SetBackgroundColor(bg)
-	fmt.Fprint(hint, " [blue]tab[-:-:-][::d]:next field[-:-:-]  [blue]shift+tab[-:-:-][::d]:prev field[-:-:-]  [blue]enter[-:-:-][::d]:confirm[-:-:-]  [blue]esc[-:-:-][::d]:cancel[-:-:-]")
+	fmt.Fprint(hint, " [#3884f4]tab[-:-:-][::d]:next field[-:-:-]  [#3884f4]shift+tab[-:-:-][::d]:prev field[-:-:-]  [#3884f4]enter[-:-:-][::d]:confirm[-:-:-]  [#3884f4]esc[-:-:-][::d]:cancel[-:-:-]")
 
 	formPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
@@ -314,8 +313,8 @@ func (v *AutoholdsView) confirmDelete() {
 	}
 
 	hold := v.holds[idx]
-	bg := tcell.NewRGBColor(24, 24, 32)
-	muted := tcell.NewRGBColor(120, 120, 140)
+	bg := ColorBg
+	muted := ColorMuted
 	deleteBg := tcell.NewRGBColor(200, 50, 50)
 	deleteActiveBg := tcell.NewRGBColor(235, 87, 87)
 	cancelBg := tcell.NewRGBColor(60, 60, 75)
@@ -404,7 +403,7 @@ func (v *AutoholdsView) confirmDelete() {
 
 	hint := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
 	hint.SetBackgroundColor(bg)
-	fmt.Fprint(hint, "[blue]tab[-:-:-][::d]:switch[-:-:-]  [blue]enter[-:-:-][::d]:confirm[-:-:-]  [blue]esc[-:-:-][::d]:cancel[-:-:-]")
+	fmt.Fprint(hint, "[#3884f4]tab[-:-:-][::d]:switch[-:-:-]  [#3884f4]enter[-:-:-][::d]:confirm[-:-:-]  [#3884f4]esc[-:-:-][::d]:cancel[-:-:-]")
 
 	spacer := func() *tview.Box { return tview.NewBox().SetBackgroundColor(bg) }
 

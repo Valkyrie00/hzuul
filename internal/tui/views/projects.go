@@ -26,22 +26,19 @@ type ProjectsView struct {
 }
 
 func NewProjectsView(app *tview.Application) *ProjectsView {
-	bg := tcell.NewRGBColor(24, 24, 32)
-	navBg := tcell.NewRGBColor(32, 32, 44)
+	bg := ColorBg
+	navBg := ColorNavBg
 
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(bg)
-	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	table.SetSelectedStyle(SelectedStyle)
 	table.SetBorder(false)
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [blue]enter[-:-:-][::d]:recent builds[-:-:-]  [blue]o[-:-:-][::d]:open in browser[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -52,17 +49,14 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	buildTable.SetBackgroundColor(bg)
-	buildTable.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	buildTable.SetSelectedStyle(SelectedStyle)
 
 	buildHeader := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildHeader.SetBackgroundColor(navBg)
 
 	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(buildKeys, " [blue]enter[-:-:-][::d]:build detail[-:-:-]  [blue]esc[-:-:-][::d]:back[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
@@ -125,7 +119,7 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 	})
 
 	buildTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc {
+		if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
 			v.pages.SwitchToPage("table")
 			v.page = "table"
 			return nil
@@ -133,22 +127,9 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 		return event
 	})
 
-	logView.Root().(*tview.Flex).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-			v.logView.Stop()
-			v.pages.SwitchToPage("builds")
-			v.page = "builds"
-			return nil
-		}
-		if event.Rune() == 'o' && v.logView.openURL != "" {
-			openURL(v.logView.openURL)
-			return nil
-		}
-		if event.Rune() == 'l' && v.logView.logURL != "" {
-			openURL(v.logView.logURL)
-			return nil
-		}
-		return event
+	logView.SetBackHandler(func() {
+		v.pages.SwitchToPage("builds")
+		v.page = "builds"
 	})
 
 	return v
@@ -175,6 +156,8 @@ func (v *ProjectsView) Load(client *api.Client) {
 	if v.page != "table" {
 		return
 	}
+	firstLoad := len(v.projects) == 0
+
 	go func() {
 		projects, err := client.GetProjects()
 		v.app.QueueUpdateDraw(func() {
@@ -186,8 +169,10 @@ func (v *ProjectsView) Load(client *api.Client) {
 			}
 			v.projects = projects
 			v.renderTable()
-			v.table.Select(1, 0)
-			v.table.ScrollToBeginning()
+			if firstLoad {
+				v.table.Select(1, 0)
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
 }
@@ -195,7 +180,7 @@ func (v *ProjectsView) Load(client *api.Client) {
 func (v *ProjectsView) renderTable() {
 	v.table.Clear()
 	setTableHeader(v.table, "Name", "Type", "Connection")
-	muted := tcell.NewRGBColor(120, 120, 140)
+	muted := ColorMuted
 	v.indexMap = nil
 	row := 1
 	for i, p := range v.projects {
@@ -242,8 +227,8 @@ func (v *ProjectsView) showProjectBuilds(p api.Project, header *tview.TextView) 
 				return
 			}
 			v.buildBuilds = builds
-			muted := tcell.NewRGBColor(120, 120, 140)
-			dim := tcell.NewRGBColor(90, 90, 110)
+			muted := ColorMuted
+			dim := ColorDim
 			for i, b := range builds {
 				row := i + 1
 				change := ""
@@ -257,7 +242,7 @@ func (v *ProjectsView) showProjectBuilds(p api.Project, header *tview.TextView) 
 				v.buildTable.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(muted))
 				v.buildTable.SetCell(row, 4, resultCell(b.Result))
 				v.buildTable.SetCell(row, 5, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
-				v.buildTable.SetCell(row, 6, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim))
+				v.buildTable.SetCell(row, 6, tview.NewTableCell(" "+formatTimestamp(b.StartTime)).SetTextColor(dim))
 			}
 			v.buildTable.Select(1, 0)
 		})

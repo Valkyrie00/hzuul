@@ -30,21 +30,18 @@ type JobsView struct {
 }
 
 func NewJobsView(app *tview.Application) *JobsView {
-	bg := tcell.NewRGBColor(24, 24, 32)
-	navBg := tcell.NewRGBColor(32, 32, 44)
+	bg := ColorBg
+	navBg := ColorNavBg
 
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(bg)
-	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	table.SetSelectedStyle(SelectedStyle)
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [blue]enter[-:-:-][::d]:job detail[-:-:-]  [blue]o[-:-:-][::d]:open in browser[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:job detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -56,7 +53,7 @@ func NewJobsView(app *tview.Application) *JobsView {
 		SetTextAlign(tview.AlignLeft)
 	detailHeader.SetBackgroundColor(navBg)
 
-	dimColor := tcell.NewRGBColor(70, 70, 90)
+	dimColor := ColorSep
 	detailSep := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
@@ -72,7 +69,7 @@ func NewJobsView(app *tview.Application) *JobsView {
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	detailKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(detailKeys, " [blue]b[-:-:-][::d]:recent builds[-:-:-]  [blue]o[-:-:-][::d]:open source[-:-:-]  [blue]esc[-:-:-][::d]:back[-:-:-]  [blue]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(detailKeys, " [#3884f4]b[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open source[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	detailPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHeader, 1, 0, false).
@@ -85,17 +82,14 @@ func NewJobsView(app *tview.Application) *JobsView {
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	buildTable.SetBackgroundColor(bg)
-	buildTable.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	buildTable.SetSelectedStyle(SelectedStyle)
 
 	buildHeader := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildHeader.SetBackgroundColor(navBg)
 
 	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(buildKeys, " [blue]enter[-:-:-][::d]:build detail[-:-:-]  [blue]esc[-:-:-][::d]:back[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
@@ -149,7 +143,7 @@ func NewJobsView(app *tview.Application) *JobsView {
 	})
 
 	detailPage.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc {
+		if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
 			v.pages.SwitchToPage("table")
 			v.page = "table"
 			return nil
@@ -181,7 +175,7 @@ func NewJobsView(app *tview.Application) *JobsView {
 	})
 
 	buildTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc {
+		if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
 			v.pages.SwitchToPage("detail")
 			v.page = "detail"
 			return nil
@@ -189,22 +183,9 @@ func NewJobsView(app *tview.Application) *JobsView {
 		return event
 	})
 
-	logView.Root().(*tview.Flex).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-			v.logView.Stop()
-			v.pages.SwitchToPage("builds")
-			v.page = "builds"
-			return nil
-		}
-		if event.Rune() == 'o' && v.logView.openURL != "" {
-			openURL(v.logView.openURL)
-			return nil
-		}
-		if event.Rune() == 'l' && v.logView.logURL != "" {
-			openURL(v.logView.logURL)
-			return nil
-		}
-		return event
+	logView.SetBackHandler(func() {
+		v.pages.SwitchToPage("builds")
+		v.page = "builds"
 	})
 
 	return v
@@ -231,6 +212,8 @@ func (v *JobsView) Load(client *api.Client) {
 	if v.page != "table" {
 		return
 	}
+	firstLoad := len(v.jobs) == 0
+
 	go func() {
 		jobs, err := client.GetJobs()
 		v.app.QueueUpdateDraw(func() {
@@ -242,8 +225,10 @@ func (v *JobsView) Load(client *api.Client) {
 			}
 			v.jobs = jobs
 			v.renderTable()
-			v.table.Select(1, 0)
-			v.table.ScrollToBeginning()
+			if firstLoad {
+				v.table.Select(1, 0)
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
 }
@@ -251,7 +236,7 @@ func (v *JobsView) Load(client *api.Client) {
 func (v *JobsView) renderTable() {
 	v.table.Clear()
 	setTableHeader(v.table, "Name", "Description")
-	muted := tcell.NewRGBColor(120, 120, 140)
+	muted := ColorMuted
 	v.indexMap = nil
 	row := 1
 	for i, j := range v.jobs {
@@ -383,7 +368,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 	v.sourceURL = ""
 
 	v.detailHeader.Clear()
-	fmt.Fprintf(v.detailHeader, " [bold]Job Detail[-:-:-] │ [blue]%s[-]", j.Name)
+	fmt.Fprintf(v.detailHeader, " [bold]Job Detail[-:-:-] │ [#3884f4]%s[-]", j.Name)
 
 	v.detailView.Clear()
 	if j.Description != "" {
@@ -422,7 +407,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 
 			parentName := ""
 			for vi, variant := range details {
-				fmt.Fprintf(v.detailView, "\n[blue]%s[-]\n", thickLine)
+				fmt.Fprintf(v.detailView, "\n[#3884f4]%s[-]\n", thickLine)
 
 				branchLabel := "all branches"
 				if branches, ok := variant["branches"].([]any); ok && len(branches) > 0 {
@@ -433,7 +418,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 					branchLabel = strings.Join(parts, ", ")
 				}
 				fmt.Fprintf(v.detailView, "[bold]Variant %d[-:-:-]  [::d](%s)[-:-:-]\n", vi+1, branchLabel)
-				fmt.Fprintf(v.detailView, "[blue]%s[-]\n\n", thickLine)
+				fmt.Fprintf(v.detailView, "[#3884f4]%s[-]\n\n", thickLine)
 
 				if p, ok := variant["parent"].(string); ok && p != "" {
 					if parentName == "" {
@@ -536,9 +521,9 @@ func (v *JobsView) showJobDetail(j api.Job) {
 
 			// Fetch parent chain from the first variant's parent
 			if parentName != "" {
-				fmt.Fprintf(v.detailView, "\n[blue]%s[-]\n", thickLine)
+				fmt.Fprintf(v.detailView, "\n[#3884f4]%s[-]\n", thickLine)
 				fmt.Fprintf(v.detailView, "[bold]Inheritance[-:-:-]\n")
-				fmt.Fprintf(v.detailView, "[blue]%s[-]\n\n", thickLine)
+				fmt.Fprintf(v.detailView, "[#3884f4]%s[-]\n\n", thickLine)
 				fmt.Fprintf(v.detailView, "  [::d]Loading parent chain...[-:-:-]")
 				go v.fetchParentChain(j.Name, parentName)
 			}
@@ -572,7 +557,7 @@ func (v *JobsView) fetchParentChain(jobName, firstParent string) {
 			depth := len(chain) - 1 - i
 			indent := strings.Repeat("   ", depth)
 			if i == 0 {
-				fmt.Fprintf(v.detailView, "  %s└─ [bold][blue]%s[-][-:-:-]  [::d](current)[-:-:-]\n", indent, chain[i])
+				fmt.Fprintf(v.detailView, "  %s└─ [bold][#3884f4]%s[-][-:-:-]  [::d](current)[-:-:-]\n", indent, chain[i])
 			} else if i == len(chain)-1 {
 				fmt.Fprintf(v.detailView, "  %s\n", chain[i])
 			} else {
@@ -610,8 +595,8 @@ func (v *JobsView) showJobBuilds(jobName string, header *tview.TextView) {
 				return
 			}
 			v.buildBuilds = builds
-			muted := tcell.NewRGBColor(120, 120, 140)
-			dim := tcell.NewRGBColor(90, 90, 110)
+			muted := ColorMuted
+			dim := ColorDim
 			for i, b := range builds {
 				row := i + 1
 				change := ""
@@ -625,7 +610,7 @@ func (v *JobsView) showJobBuilds(jobName string, header *tview.TextView) {
 				v.buildTable.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(muted))
 				v.buildTable.SetCell(row, 4, resultCell(b.Result))
 				v.buildTable.SetCell(row, 5, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
-				v.buildTable.SetCell(row, 6, tview.NewTableCell(" "+b.StartTime).SetTextColor(dim))
+				v.buildTable.SetCell(row, 6, tview.NewTableCell(" "+formatTimestamp(b.StartTime)).SetTextColor(dim))
 			}
 			v.buildTable.Select(1, 0)
 		})

@@ -46,28 +46,24 @@ type StatusView struct {
 }
 
 func NewStatusView(app *tview.Application) *StatusView {
-	bg := tcell.NewRGBColor(24, 24, 32)
-
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
-	table.SetBackgroundColor(bg)
+	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(38, 38, 50)))
+		Background(ColorSelectBg))
 
 	logView := NewBuildLogView(app)
-
-	navBg := tcell.NewRGBColor(32, 32, 44)
 	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [blue]enter[-:-:-][::d]:expand/open[-:-:-]  [blue]o[-:-:-][::d]:open change[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	keys.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
 		AddItem(keys, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(bg)
+	tableWithKeys.SetBackgroundColor(ColorBg)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).
@@ -75,7 +71,7 @@ func NewStatusView(app *tview.Application) *StatusView {
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(pages, 0, 1, true)
-	root.SetBackgroundColor(bg)
+	root.SetBackgroundColor(ColorBg)
 
 	v := &StatusView{
 		root:               root,
@@ -168,21 +164,8 @@ func NewStatusView(app *tview.Application) *StatusView {
 		return event
 	})
 
-	logView.Root().(*tview.Flex).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-			v.logView.Stop()
-			v.pages.SwitchToPage("table")
-			return nil
-		}
-		if event.Rune() == 'o' && v.logView.openURL != "" {
-			openURL(v.logView.openURL)
-			return nil
-		}
-		if event.Rune() == 'l' && v.logView.logURL != "" {
-			openURL(v.logView.logURL)
-			return nil
-		}
-		return event
+	logView.SetBackHandler(func() {
+		v.pages.SwitchToPage("table")
 	})
 
 	return v
@@ -200,6 +183,12 @@ func (v *StatusView) SetFilter(term string) {
 
 func (v *StatusView) Load(client *api.Client) {
 	v.client = client
+
+	if v.status == nil {
+		v.table.Clear()
+		v.setStatusHeader()
+		v.table.SetCell(1, 0, tview.NewTableCell(" [yellow]Loading...[-]").SetSelectable(false).SetExpansion(1))
+	}
 
 	go func() {
 		status, err := client.GetStatus()
@@ -263,11 +252,11 @@ func (v *StatusView) setStatusHeader() {
 		{"Owner", 0},
 		{"Progress", 0},
 		{"Elapsed", 0},
-		{"Jobs", 1},
+		{"Jobs", 0},
 	}
 	for i, h := range headers {
 		cell := tview.NewTableCell(" " + h.name).
-			SetTextColor(tcell.NewRGBColor(56, 132, 244)).
+			SetTextColor(ColorAccent).
 			SetSelectable(false).
 			SetAttributes(tcell.AttrBold).
 			SetExpansion(h.expansion)
@@ -295,9 +284,9 @@ func (v *StatusView) rebuildTable() {
 	v.setStatusHeader()
 	v.rowMap = make(map[int]rowEntry)
 
-	sectionBg := tcell.NewRGBColor(30, 30, 42)
-	jobBg := tcell.NewRGBColor(28, 28, 38)
-	muted := tcell.NewRGBColor(120, 120, 140)
+	sectionBg := ColorSectionBg
+	jobBg := ColorJobBg
+	muted := ColorMuted
 	sectionColor := tcell.NewRGBColor(230, 185, 90)
 	now := time.Now()
 	tableRow := 1 // row 0 is header
@@ -331,7 +320,7 @@ func (v *StatusView) rebuildTable() {
 		if sectionsRendered > 0 {
 			for col := 0; col < statusCols; col++ {
 				exp := 0
-				if col == 0 || col == statusCols-1 {
+				if col == 0 {
 					exp = 1
 				}
 				v.table.SetCell(tableRow, col,
@@ -351,12 +340,8 @@ func (v *StatusView) rebuildTable() {
 			SetTextColor(sectionColor).SetAttributes(tcell.AttrBold).
 			SetBackgroundColor(sectionBg).SetExpansion(1).SetMaxWidth(45))
 		for col := 1; col < statusCols; col++ {
-			exp := 0
-			if col == statusCols-1 {
-				exp = 1
-			}
 			v.table.SetCell(tableRow, col,
-				tview.NewTableCell("").SetBackgroundColor(sectionBg).SetExpansion(exp))
+				tview.NewTableCell("").SetBackgroundColor(sectionBg))
 		}
 		tableRow++
 		sectionsRendered++
@@ -393,7 +378,7 @@ func (v *StatusView) rebuildTable() {
 				v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetExpansion(0))
 				elapsed := formatElapsed(sr.item.EnqueueTime, now)
 				v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
-				v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+label).SetTextColor(muted).SetExpansion(1))
+				v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+label).SetTextColor(muted))
 				tableRow++
 				continue
 			}
@@ -413,7 +398,7 @@ func (v *StatusView) rebuildTable() {
 			v.table.SetCell(tableRow, 2, tview.NewTableCell(" "+owner).SetTextColor(tcell.NewRGBColor(180, 160, 220)).SetExpansion(0))
 			v.table.SetCell(tableRow, 3, tview.NewTableCell(" "+bar).SetExpansion(0))
 			v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
-			v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+summary).SetTextColor(muted).SetExpansion(1))
+			v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+summary).SetTextColor(muted))
 			tableRow++
 
 			if v.expanded[i] {
@@ -437,7 +422,7 @@ func (v *StatusView) rebuildTable() {
 					v.table.SetCell(tableRow, 2, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 4, tview.NewTableCell(jobElapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetBackgroundColor(jobBg))
-					v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+resultText).SetExpansion(1).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+resultText).SetBackgroundColor(jobBg))
 					tableRow++
 				}
 			}
@@ -460,7 +445,7 @@ func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 	if project == "" {
 		project = sr.queue
 	}
-	fmt.Fprintf(v.logView.header, " [bold]Log[-] │ [blue]%s[-] │ %s │ #%s",
+	fmt.Fprintf(v.logView.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ #%s",
 		job.Name, project, sr.item.ChangeID())
 
 	v.logView.textView.Clear()
@@ -561,7 +546,7 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 	if project == "" {
 		project = sr.queue
 	}
-	fmt.Fprintf(v.logView.header, " [bold]Build Detail[-] │ [blue]%s[-] │ %s │ #%s",
+	fmt.Fprintf(v.logView.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ #%s",
 		job.Name, project, sr.item.ChangeID())
 
 	v.logView.textView.Clear()
@@ -598,7 +583,7 @@ func jobResultText(result string) string {
 	case "SKIPPED":
 		return "[#78788c]SKIPPED[-]"
 	case "running":
-		return "[#3884f4]running[-]"
+		return "[#3884f4]RUNNING[-]"
 	default:
 		return "[#78788c]" + result + "[-]"
 	}
@@ -654,7 +639,7 @@ func compactProgress(running, success, failure, other, total int) string {
 	}{
 		{success, "[green]"},
 		{failure, "[red]"},
-		{running, "[#50A0FF]"},
+		{running, "[#3884f4]"},
 		{other, "[yellow]"},
 	}
 	filled := 0
@@ -677,21 +662,21 @@ func compactProgress(running, success, failure, other, total int) string {
 func jobSummaryText(running, success, failure, other int) string {
 	var parts []string
 	if success > 0 {
-		parts = append(parts, fmt.Sprintf("[green]%d ok[-]", success))
+		parts = append(parts, fmt.Sprintf("[#48c78e]%d[-:-:-]", success))
 	}
 	if failure > 0 {
-		parts = append(parts, fmt.Sprintf("[red]%d fail[-]", failure))
+		parts = append(parts, fmt.Sprintf("[#eb5757]%d[-:-:-]", failure))
 	}
 	if running > 0 {
-		parts = append(parts, fmt.Sprintf("[blue]%d run[-]", running))
+		parts = append(parts, fmt.Sprintf("[#3884f4]%d[-:-:-]", running))
 	}
 	if other > 0 {
-		parts = append(parts, fmt.Sprintf("[yellow]%d other[-]", other))
+		parts = append(parts, fmt.Sprintf("[#f2c94c]%d[-:-:-]", other))
 	}
 	if len(parts) == 0 {
-		return "[::d]no jobs[-]"
+		return "[#78788c]—[-:-:-]"
 	}
-	return strings.Join(parts, " / ")
+	return strings.Join(parts, "[#5a5a6e]/[-:-:-]")
 }
 
 func jobNameColor(result string) tcell.Color {

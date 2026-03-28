@@ -12,6 +12,7 @@ import (
 type BuildsetsView struct {
 	root         *tview.Flex
 	table        *tview.Table
+	countLabel   *tview.TextView
 	pages        *tview.Pages
 	detailFlex   *tview.Flex
 	detailHead   *tview.TextView
@@ -31,62 +32,72 @@ type BuildsetsView struct {
 }
 
 func NewBuildsetsView(app *tview.Application) *BuildsetsView {
-	bg := tcell.NewRGBColor(24, 24, 32)
-
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
-	table.SetBackgroundColor(bg)
-	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	table.SetBackgroundColor(ColorBg)
+	table.SetSelectedStyle(SelectedStyle)
 
 	detailHead := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	detailHead.SetBackgroundColor(bg)
+	detailHead.SetBackgroundColor(ColorBg)
 	detailHead.SetBorderPadding(0, 0, 1, 0)
 
 	detailTbl := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
-	detailTbl.SetBackgroundColor(bg)
-	detailTbl.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	detailTbl.SetBackgroundColor(ColorBg)
+	detailTbl.SetSelectedStyle(SelectedStyle)
 
 	sep := tview.NewTextView().SetDynamicColors(true)
-	sep.SetBackgroundColor(bg)
-	sep.SetTextColor(tcell.NewRGBColor(50, 50, 65))
+	sep.SetBackgroundColor(ColorBg)
+	sep.SetTextColor(ColorSep)
 	fmt.Fprint(sep, "  ──────────────────────────────────────")
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true)
-	detailKeys.SetBackgroundColor(bg)
-	fmt.Fprint(detailKeys, " [blue]esc[-:-:-][::d]:back[-:-:-]  [blue]enter[-:-:-][::d]:build detail[-:-:-]  [blue]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	detailKeys.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(detailKeys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	detailFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHead, 0, 0, false).
 		AddItem(sep, 1, 0, false).
 		AddItem(detailTbl, 0, 1, true).
 		AddItem(detailKeys, 1, 0, false)
-	detailFlex.SetBackgroundColor(bg)
+	detailFlex.SetBackgroundColor(ColorBg)
+
+	countLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
+	countLabel.SetBackgroundColor(ColorBg)
+
+	tableKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
+	tableKeys.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(tableKeys, " [#3884f4]enter[-:-:-][::d]:buildset detail[-:-:-]  [#3884f4]/[-:-:-][::d]:search[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+
+	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(tableKeys, 0, 1, false).
+		AddItem(countLabel, 20, 0, false)
+	keysRow.SetBackgroundColor(ColorNavBg)
+
+	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(table, 0, 1, true).
+		AddItem(keysRow, 1, 0, false)
+	tableWithKeys.SetBackgroundColor(ColorBg)
 
 	logView := NewBuildLogView(app)
 
 	pages := tview.NewPages().
-		AddPage("table", table, true, true).
+		AddPage("table", tableWithKeys, true, true).
 		AddPage("detail", detailFlex, true, false).
 		AddPage("log", logView.Root(), true, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(pages, 0, 1, true)
-	root.SetBackgroundColor(bg)
+	root.SetBackgroundColor(ColorBg)
 
 	v := &BuildsetsView{
 		root:       root,
 		table:      table,
+		countLabel: countLabel,
 		pages:      pages,
 		detailFlex: detailFlex,
 		detailHead: detailHead,
@@ -131,23 +142,10 @@ func NewBuildsetsView(app *tview.Application) *BuildsetsView {
 		return event
 	})
 
-	logView.Root().(*tview.Flex).SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
-			v.logView.Stop()
-			v.pages.SwitchToPage("detail")
-			v.onLog = false
-			v.app.SetFocus(v.detailTbl)
-			return nil
-		}
-		if event.Rune() == 'o' && v.logView.openURL != "" {
-			openURL(v.logView.openURL)
-			return nil
-		}
-		if event.Rune() == 'l' && v.logView.logURL != "" {
-			openURL(v.logView.logURL)
-			return nil
-		}
-		return event
+	logView.SetBackHandler(func() {
+		v.pages.SwitchToPage("detail")
+		v.onLog = false
+		v.app.SetFocus(v.detailTbl)
 	})
 
 	return v
@@ -186,9 +184,7 @@ func (v *BuildsetsView) searchServer() {
 	v.loading = true
 	f := v.curFilter
 	f.Skip = 0
-	v.table.Clear()
-	setBuildsetHeader(v.table)
-	v.table.SetCell(1, 0, tview.NewTableCell(" [yellow]Searching...[-]").SetSelectable(false))
+	firstLoad := len(v.buildsets) == 0
 
 	go func() {
 		buildsets, err := v.client.GetBuildsets(&f)
@@ -204,10 +200,22 @@ func (v *BuildsetsView) searchServer() {
 			v.skip = len(buildsets)
 			v.noMore = len(buildsets) < defaultPageSize
 			v.renderRows(0)
-			v.table.Select(1, 0)
-			v.table.ScrollToBeginning()
+			v.updateCount()
+			if firstLoad {
+				v.table.Select(1, 0)
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
+}
+
+func (v *BuildsetsView) updateCount() {
+	v.countLabel.Clear()
+	suffix := ""
+	if !v.noMore {
+		suffix = "+"
+	}
+	fmt.Fprintf(v.countLabel, "[::d]%d%s items [-]", len(v.buildsets), suffix)
 }
 
 func (v *BuildsetsView) loadMore() {
@@ -238,6 +246,7 @@ func (v *BuildsetsView) loadMore() {
 			v.skip += len(buildsets)
 			v.noMore = len(buildsets) < defaultPageSize
 			v.renderRows(startIdx)
+			v.updateCount()
 		})
 	}()
 }
@@ -301,7 +310,7 @@ func (v *BuildsetsView) showDetail(bs api.Buildset) {
 			v.detailTbl.Clear()
 			setTableHeader(v.detailTbl, "Job", "Result", "Duration", "Voting")
 
-			muted := tcell.NewRGBColor(120, 120, 140)
+			muted := ColorMuted
 			for i, b := range full.Builds {
 				row := i + 1
 				brc := resultColor(b.Result)
@@ -352,8 +361,8 @@ func buildsetProjects(bs api.Buildset) string {
 }
 
 func (v *BuildsetsView) renderRows(fromIdx int) {
-	muted := tcell.NewRGBColor(120, 120, 140)
-	dim := tcell.NewRGBColor(90, 90, 110)
+	muted := ColorMuted
+	dim := ColorDim
 	row := fromIdx + 1
 	for i := fromIdx; i < len(v.buildsets); i++ {
 		bs := v.buildsets[i]
@@ -363,10 +372,10 @@ func (v *BuildsetsView) renderRows(fromIdx int) {
 		rc := resultColor(bs.Result)
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(bs.Result)+" "+bs.Pipeline).SetTextColor(rc))
 		v.table.SetCell(row, 1, resultCell(bs.Result))
-		v.table.SetCell(row, 2, tview.NewTableCell(" "+projStr).SetTextColor(muted).SetMaxWidth(50))
-		v.table.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(tcell.NewRGBColor(56, 132, 244)))
-		v.table.SetCell(row, 4, tview.NewTableCell(" "+bs.FirstBuildStart).SetTextColor(dim))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+bs.LastBuildEnd).SetTextColor(dim).SetExpansion(1))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+projStr).SetTextColor(muted).SetMaxWidth(50).SetExpansion(1))
+		v.table.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(ColorAccent))
+		v.table.SetCell(row, 4, tview.NewTableCell(" "+formatTimestamp(bs.FirstBuildStart)).SetTextColor(dim))
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+formatTimestamp(bs.LastBuildEnd)).SetTextColor(dim))
 		row++
 	}
 	if len(v.buildsets) == 0 && v.filter != "" {

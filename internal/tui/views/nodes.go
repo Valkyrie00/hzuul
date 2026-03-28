@@ -20,15 +20,17 @@ func NewNodesView(app *tview.Application) *NodesView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
-	table.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
-	table.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.NewRGBColor(30, 30, 42)).
-		Foreground(tcell.ColorWhite).
-		Attributes(tcell.AttrBold))
+	table.SetBackgroundColor(ColorBg)
+	table.SetSelectedStyle(SelectedStyle)
+
+	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
+	keys.SetBackgroundColor(ColorNavBg)
+	fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(table, 0, 1, true)
-	root.SetBackgroundColor(tcell.NewRGBColor(24, 24, 32))
+		AddItem(table, 0, 1, true).
+		AddItem(keys, 1, 0, false)
+	root.SetBackgroundColor(ColorBg)
 
 	return &NodesView{root: root, table: table, app: app}
 }
@@ -42,6 +44,8 @@ func (v *NodesView) SetFilter(term string) {
 }
 
 func (v *NodesView) Load(client *api.Client) {
+	firstLoad := len(v.nodes) == 0
+
 	go func() {
 		nodes, err := client.GetNodes()
 		v.app.QueueUpdateDraw(func() {
@@ -53,8 +57,10 @@ func (v *NodesView) Load(client *api.Client) {
 			}
 			v.nodes = nodes
 			v.renderTable()
-			v.table.Select(1, 0)
-			v.table.ScrollToBeginning()
+			if firstLoad {
+				v.table.Select(1, 0)
+				v.table.ScrollToBeginning()
+			}
 		})
 	}()
 }
@@ -62,7 +68,7 @@ func (v *NodesView) Load(client *api.Client) {
 func (v *NodesView) renderTable() {
 	v.table.Clear()
 	setTableHeader(v.table, "ID", "Label", "Provider", "State", "Age", "Comment")
-	muted := tcell.NewRGBColor(120, 120, 140)
+	muted := ColorMuted
 	row := 1
 	for _, n := range v.nodes {
 		label := n.DisplayLabel()
@@ -70,11 +76,11 @@ func (v *NodesView) renderTable() {
 			continue
 		}
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+n.ID).SetTextColor(tcell.ColorWhite))
-		v.table.SetCell(row, 1, tview.NewTableCell(" "+label).SetTextColor(muted))
+		v.table.SetCell(row, 1, tview.NewTableCell(" "+label).SetTextColor(muted).SetExpansion(1))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+n.Provider).SetTextColor(muted))
 		v.table.SetCell(row, 3, stateCell(n.State))
 		v.table.SetCell(row, 4, tview.NewTableCell(" "+n.AgeString()).SetTextColor(muted))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+n.Comment).SetTextColor(muted).SetExpansion(1))
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+n.Comment).SetTextColor(muted))
 		row++
 	}
 	if row == 1 {
