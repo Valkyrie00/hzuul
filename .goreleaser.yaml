@@ -25,11 +25,44 @@ archives:
 
 checksum:
   name_template: "checksums.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: vcastell
+    name: hzuul
+  draft: false
+  prerelease: auto
+  header: |
+    ## HZUUL {{ .Version }}
+
+    Install or upgrade:
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/vcastell/hzuul/main/install.sh | bash
+    ```
 
 changelog:
+  use: github
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
       - "^ci:"
+      - "^chore:"
+      - "^style:"
+      - "Merge pull request"
+      - "Merge branch"
+  groups:
+    - title: "Features"
+      regexp: "^.*feat[(\\w)]*:.*$"
+      order: 0
+    - title: "Bug Fixes"
+      regexp: "^.*fix[(\\w)]*:.*$"
+      order: 1
+    - title: "Refactoring"
+      regexp: "^.*refactor[(\\w)]*:.*$"
+      order: 2
+    - title: "Performance"
+      regexp: "^.*perf[(\\w)]*:.*$"
+      order: 3

@@ -17,6 +17,14 @@ Monitor pipelines, browse builds, stream logs, and manage your Zuul instance —
 
 ## Install
 
+### Quick install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vcastell/hzuul/main/install.sh | bash
+```
+
+Downloads the latest release for your platform (macOS/Linux, amd64/arm64), verifies the checksum, and installs to `/usr/local/bin`.
+
 ### From source
 
 ```bash
