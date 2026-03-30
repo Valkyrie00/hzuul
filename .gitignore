@@ -1,5 +1,5 @@
 bin/
 dist/
-hzuul
+/hzuul
 *.exe
 .DS_Store

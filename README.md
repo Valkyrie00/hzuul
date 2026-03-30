@@ -1,4 +1,4 @@
-# hZuul
+# HZUUL
 
 Terminal User Interface for [Zuul CI/CD](https://zuul-ci.org/).
 
@@ -34,7 +34,7 @@ make build
 
 ## Configuration
 
-hZuul uses a YAML config at `~/.config/hzuul/config.yaml`:
+HZUUL uses a YAML config at `~/.config/hzuul/config.yaml`:
 
 ```yaml
 current_context: my-zuul
@@ -52,7 +52,7 @@ contexts:
     auth: none
 ```
 
-On first run without a config, hZuul defaults to `zuul.opendev.org` (public, no auth).
+On first run without a config, HZUUL defaults to `zuul.opendev.org` (public, no auth).
 
 ### Kerberos Authentication
 
@@ -60,7 +60,7 @@ For instances requiring Kerberos:
 
 ```bash
 kinit                # get your Kerberos ticket
-hzuul                # hZuul picks it up automatically
+hzuul                # HZUUL picks it up automatically
 ```
 
 ## Keybindings
