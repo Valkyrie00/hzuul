@@ -31,19 +31,6 @@ func NewClient(ctx *config.Context) (*Client, error) {
 
 	var authProvider auth.Provider
 	switch strings.ToLower(ctx.Auth) {
-	case "oidc":
-		if ctx.Username == "" {
-			return nil, fmt.Errorf("oidc auth requires 'username' in config")
-		}
-		password := ctx.Password()
-		if password == "" {
-			return nil, fmt.Errorf("oidc auth: password not provided (set via prompt or HZUUL_PASSWORD env)")
-		}
-		o, err := auth.NewOIDC(strings.TrimRight(ctx.URL, "/"), ctx.Username, password, ctx.SSLVerify(), ctx.CACert)
-		if err != nil {
-			return nil, fmt.Errorf("oidc auth: %w", err)
-		}
-		authProvider = o
 	case "kerberos":
 		baseURL := strings.TrimRight(ctx.URL, "/")
 		k, err := auth.NewKerberos(baseURL+"/api/tenants", ctx.SSLVerify(), ctx.CACert)

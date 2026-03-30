@@ -16,21 +16,9 @@ type Config struct {
 type Context struct {
 	URL       string `yaml:"url"`
 	Tenant    string `yaml:"tenant"`
-	Auth      string `yaml:"auth"`      // "oidc", "kerberos", or "none"
+	Auth      string `yaml:"auth"`                // "kerberos" or "none"
 	VerifySSL *bool  `yaml:"verify_ssl,omitempty"`
 	CACert    string `yaml:"ca_cert,omitempty"` // path to CA bundle (e.g. tls-ca-bundle.pem)
-	Username  string `yaml:"username,omitempty"` // for auth: oidc
-
-	// password is not persisted in YAML -- set at runtime via env or prompt
-	password string `yaml:"-"` //nolint:unused
-}
-
-func (c *Context) SetPassword(p string) {
-	c.password = p
-}
-
-func (c *Context) Password() string {
-	return c.password
 }
 
 func (c *Config) Active() (*Context, error) {
