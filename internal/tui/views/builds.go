@@ -84,9 +84,12 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 		if event.Rune() == 'l' {
 			row, _ := table.GetSelection()
 			idx := v.buildIndex(row)
-			if idx >= 0 {
+			if idx >= 0 && v.client != nil {
 				build := v.builds[idx]
-				v.logView.StreamBuild(nil, &build)
+				if build.UUID == "" {
+					return nil
+				}
+				v.logView.StreamBuild(v.client, &build)
 				v.pages.SwitchToPage("detail")
 				v.onDetail = true
 			}
