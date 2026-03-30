@@ -1,4 +1,4 @@
-module github.com/vcastell/hzuul
+module github.com/Valkyrie00/hzuul
 
 go 1.25.0
 

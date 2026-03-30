@@ -10,7 +10,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/vcastell/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 type BuildLogView struct {

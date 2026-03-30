@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vcastell/hzuul/internal/config"
-	"github.com/vcastell/hzuul/internal/tui"
+	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/Valkyrie00/hzuul/internal/tui"
 )
 
 var (

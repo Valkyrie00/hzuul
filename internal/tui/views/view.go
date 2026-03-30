@@ -2,7 +2,7 @@ package views
 
 import (
 	"github.com/rivo/tview"
-	"github.com/vcastell/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 // View is the interface that all TUI views implement.

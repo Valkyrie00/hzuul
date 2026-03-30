@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vcastell/hzuul/internal/auth"
-	"github.com/vcastell/hzuul/internal/config"
+	"github.com/Valkyrie00/hzuul/internal/auth"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type Client struct {

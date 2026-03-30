@@ -20,7 +20,7 @@ Monitor pipelines, browse builds, stream logs, and manage your Zuul instance —
 ### Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vcastell/hzuul/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Valkyrie00/hzuul/main/install.sh | bash
 ```
 
 Downloads the latest release for your platform (macOS/Linux, amd64/arm64), verifies the checksum, and installs to `/usr/local/bin`.
@@ -28,13 +28,13 @@ Downloads the latest release for your platform (macOS/Linux, amd64/arm64), verif
 ### From source
 
 ```bash
-go install github.com/vcastell/hzuul/cmd/hzuul@latest
+go install github.com/Valkyrie00/hzuul/cmd/hzuul@latest
 ```
 
 ### Build locally
 
 ```bash
-git clone https://github.com/vcastell/hzuul.git
+git clone https://github.com/Valkyrie00/hzuul.git
 cd hzuul
 make build
 ./bin/hzuul

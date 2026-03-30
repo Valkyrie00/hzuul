@@ -1,15 +1,15 @@
 #!/bin/bash
 #
 # HZUUL Installer
-# https://github.com/vcastell/hzuul
+# https://github.com/Valkyrie00/hzuul
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/vcastell/hzuul/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Valkyrie00/hzuul/main/install.sh | bash
 #
 
 set -e
 
-REPO="vcastell/hzuul"
+REPO="Valkyrie00/hzuul"
 BINARY="hzuul"
 INSTALL_DIR="/usr/local/bin"
 

@@ -29,7 +29,7 @@ checksum:
 
 release:
   github:
-    owner: vcastell
+    owner: Valkyrie00
     name: hzuul
   draft: false
   prerelease: auto
@@ -38,7 +38,7 @@ release:
 
     Install or upgrade:
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/vcastell/hzuul/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/Valkyrie00/hzuul/main/install.sh | bash
     ```
 
 changelog:

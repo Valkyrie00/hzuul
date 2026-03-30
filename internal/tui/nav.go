@@ -5,7 +5,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/vcastell/hzuul/internal/tui/views"
+	"github.com/Valkyrie00/hzuul/internal/tui/views"
 )
 
 var tabNames = []string{
