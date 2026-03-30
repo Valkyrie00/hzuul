@@ -10,10 +10,7 @@ import (
 	"github.com/vcastell/hzuul/internal/api"
 )
 
-var (
-	colorTableHeader = ColorAccent
-	colorSeparator   = ColorSep
-)
+var colorTableHeader = ColorAccent
 
 func rowMatchesFilter(filter string, fields ...string) bool {
 	if filter == "" {

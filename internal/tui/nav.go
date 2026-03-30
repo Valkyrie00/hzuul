@@ -5,6 +5,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/vcastell/hzuul/internal/tui/views"
 )
 
 var tabNames = []string{
@@ -29,7 +30,7 @@ func NewNavBar(onTab func(int)) *NavBar {
 	tv := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	tv.SetBackgroundColor(ColorNavBg)
+	tv.SetBackgroundColor(views.ColorNavBg)
 
 	n := &NavBar{
 		TextView: tv,

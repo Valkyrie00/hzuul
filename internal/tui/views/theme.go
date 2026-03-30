@@ -10,9 +10,7 @@ var (
 	ColorMuted     = tcell.NewRGBColor(120, 120, 140)
 	ColorDim       = tcell.NewRGBColor(90, 90, 110)
 	ColorSep       = tcell.NewRGBColor(50, 50, 65)
-	ColorSelectBg  = tcell.NewRGBColor(50, 52, 70)
-	ColorJobBg     = tcell.NewRGBColor(35, 35, 48)
-	ColorSectionBg = tcell.NewRGBColor(35, 35, 48)
+	ColorSelectBg = tcell.NewRGBColor(50, 52, 70)
 )
 
 var SelectedStyle = tcell.StyleDefault.

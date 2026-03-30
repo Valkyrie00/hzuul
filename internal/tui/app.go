@@ -14,21 +14,21 @@ import (
 const defaultRefreshInterval = 30 * time.Second
 
 type App struct {
-	app    *tview.Application
-	pages  *tview.Pages
-	nav    *NavBar
-	header     *tview.TextView
-	footer     *tview.Flex
-	footerKeys *tview.TextView
-	footerTime *tview.TextView
-	filterText  string
-	filterPos   int
-	filterOpen  bool
-	filterTimer *time.Timer
-	client  *api.Client
-	cfg     *config.Config
-	views   []views.View
-	stopCh  chan struct{}
+	app             *tview.Application
+	pages           *tview.Pages
+	nav             *NavBar
+	header          *tview.TextView
+	footer          *tview.Flex
+	footerKeys      *tview.TextView
+	footerTime      *tview.TextView
+	filterText      string
+	filterPos       int
+	filterOpen      bool
+	filterTimer     *time.Timer
+	client          *api.Client
+	cfg             *config.Config
+	views           []views.View
+	stopCh          chan struct{}
 	refreshInterval time.Duration
 }
 
@@ -99,7 +99,7 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 	tv := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	tv.SetBackgroundColor(ColorHeaderBg)
+	tv.SetBackgroundColor(views.ColorHeaderBg)
 	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]│[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
 		ctx.URL, ctx.Tenant, a.cfg.CurrentContext)
 	return tv
@@ -109,12 +109,12 @@ func (a *App) buildFooter() {
 	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
+	keys.SetBackgroundColor(views.ColorNavBg)
 
 	ts := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignRight)
-	ts.SetBackgroundColor(ColorNavBg)
+	ts.SetBackgroundColor(views.ColorNavBg)
 
 	a.footerKeys = keys
 	a.footerTime = ts
@@ -123,7 +123,7 @@ func (a *App) buildFooter() {
 	a.footer = tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(keys, 0, 1, false).
 		AddItem(ts, 22, 0, false)
-	a.footer.SetBackgroundColor(ColorNavBg)
+	a.footer.SetBackgroundColor(views.ColorNavBg)
 }
 
 const footerKeysBase = " [#3884f4]?[-:-:-][::d]:help[-:-:-]  [#3884f4]t[-:-:-][::d]:tenant[-:-:-]  [#3884f4]r[-:-:-][::d]:refresh[-:-:-]  [#3884f4]1-9[-:-:-][::d]:views[-:-:-]  [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]q[-:-:-][::d]:quit[-:-:-]"
@@ -373,15 +373,13 @@ func (a *App) showTenantPicker() {
 		}
 
 		a.app.QueueUpdateDraw(func() {
-			selectBg := tcell.NewRGBColor(50, 52, 70)
-
 			list := tview.NewList()
 			list.SetTitle(" Select Tenant ").SetBorder(true)
 			list.SetBorderColor(views.ColorSep)
 			list.SetMainTextColor(tcell.ColorWhite)
 			list.SetSecondaryTextColor(views.ColorMuted)
 			list.SetSelectedTextColor(tcell.ColorWhite)
-			list.SetSelectedBackgroundColor(selectBg)
+			list.SetSelectedBackgroundColor(views.ColorSelectBg)
 			list.SetHighlightFullLine(true)
 			list.ShowSecondaryText(false)
 
@@ -444,7 +442,7 @@ func (a *App) showQuitConfirm() {
 	modal := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter).
-		SetText("\n\n [::b]Quit HZUUL?[-:-:-]\n\n [#78788c]Press[-:-:-] [#48c78e::b]y[-:-:-] [#78788c]to confirm or[-:-:-] [#eb5757::b]n[-:-:-][#78788c]/[-:-:-][white]Esc[-:-:-] [#78788c]to cancel[-:-:-]")
+		SetText("\n\n [::b]Quit HZUUL?[-:-:-]\n\n [#78788c]Press[-:-:-] [#48c78e::b]y[-:-:-] [#78788c]to confirm or[-:-:-] [#eb5757::b]n[-:-:-][#78788c]")
 	modal.SetBorder(true).
 		SetTitle(" Quit ").
 		SetBorderColor(views.ColorSep)
