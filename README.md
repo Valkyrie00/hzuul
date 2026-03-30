@@ -34,33 +34,64 @@ make build
 
 ## Configuration
 
-HZUUL uses a YAML config at `~/.config/hzuul/config.yaml`:
+HZUUL uses a YAML config at `~/.config/hzuul/config.yaml`.
+
+On first run without a config, HZUUL defaults to `zuul.opendev.org` (public, no auth).
+
+### Public instances (no auth required)
+
+```yaml
+current_context: opendev
+
+contexts:
+  opendev:
+    url: https://zuul.opendev.org
+    tenant: openstack
+
+  opendev-zuul:
+    url: https://zuul.opendev.org
+    tenant: zuul
+```
+
+### Private instance with Kerberos
 
 ```yaml
 current_context: my-zuul
 
 contexts:
   my-zuul:
-    url: https://zuul.example.com
+    url: https://zuul.internal.example.com
     tenant: my-tenant
     auth: kerberos
     verify_ssl: true
-
-  community:
-    url: https://zuul.opendev.org
-    tenant: openstack
-    auth: none
+    ca_cert: /path/to/ca-bundle.pem   # optional, for internal CAs
 ```
-
-On first run without a config, HZUUL defaults to `zuul.opendev.org` (public, no auth).
-
-### Kerberos Authentication
-
-For instances requiring Kerberos:
 
 ```bash
 kinit                # get your Kerberos ticket
 hzuul                # HZUUL picks it up automatically
+```
+
+### Multi-instance example
+
+```yaml
+current_context: my-zuul
+
+contexts:
+  my-zuul:
+    url: https://zuul.internal.example.com
+    tenant: my-tenant
+    auth: kerberos
+
+  opendev:
+    url: https://zuul.opendev.org
+    tenant: openstack
+```
+
+Switch context via `--context`:
+
+```bash
+hzuul --context opendev
 ```
 
 ## Keybindings
