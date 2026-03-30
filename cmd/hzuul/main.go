@@ -18,11 +18,12 @@ var (
 
 func main() {
 	root := &cobra.Command{
-		Use:     "hzuul",
-		Short:   "Terminal UI for Zuul CI/CD",
-		Long:    "HZUUL is a terminal user interface for monitoring and managing Zuul CI/CD pipelines, builds, and jobs.",
-		Version: version,
-		RunE:    run,
+		Use:          "hzuul",
+		Short:        "Terminal UI for Zuul CI/CD",
+		Long:         "HZUUL is a terminal user interface for monitoring and managing Zuul CI/CD pipelines, builds, and jobs.",
+		Version:      version,
+		RunE:         run,
+		SilenceUsage: true,
 	}
 
 	root.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.config/hzuul/config.yaml)")
@@ -30,7 +31,6 @@ func main() {
 	root.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug logging")
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -54,7 +54,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	app, err := tui.New(cfg)
 	if err != nil {
-		return fmt.Errorf("initializing TUI: %w", err)
+		return err
 	}
 
 	return app.Run()

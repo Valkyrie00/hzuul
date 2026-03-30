@@ -40,6 +40,10 @@ func NewKerberos(targetURL string, verifySSL bool, caCert string) (*Kerberos, er
 		return nil, fmt.Errorf("curl not found in PATH — required for Kerberos auth")
 	}
 
+	if err := checkKerberosTicket(); err != nil {
+		return nil, err
+	}
+
 	jar, _ := cookiejar.New(nil)
 	k := &Kerberos{jar: jar, verifySSL: verifySSL, caCert: caCert}
 
@@ -428,6 +432,23 @@ func generateCodeVerifier() string {
 func generateCodeChallenge(verifier string) string {
 	h := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+func checkKerberosTicket() error {
+	klist, err := exec.LookPath("klist")
+	if err != nil {
+		return nil // klist not available, let curl negotiate and report the error
+	}
+	out, err := exec.Command(klist, "-s").CombinedOutput()
+	if err != nil {
+		hint := "run 'kinit' to obtain a Kerberos ticket"
+		if len(out) > 0 {
+			detail := strings.TrimSpace(string(out))
+			return fmt.Errorf("no valid Kerberos ticket found: %s — %s", detail, hint)
+		}
+		return fmt.Errorf("no valid Kerberos ticket found — %s", hint)
+	}
+	return nil
 }
 
 func loadCACertPool(path string) (*x509.CertPool, error) {
