@@ -109,77 +109,118 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 
 	v.stopCh = make(chan struct{})
 
-	go func() {
+	go v.streamLoop(client, build)
+}
+
+func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
+	const maxRetries = 5
+	const retryDelay = 3 * time.Second
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			v.app.QueueUpdateDraw(func() {
+				fmt.Fprintf(v.textView, "\n[yellow::b]Reconnecting... (attempt %d/%d)[-:-:-]\n", attempt, maxRetries)
+				v.textView.ScrollToEnd()
+			})
+
+			select {
+			case <-v.stopCh:
+				return
+			case <-time.After(retryDelay):
+			}
+		}
+
 		streamer, err := client.StreamLog(build.UUID, "console.log")
 		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.textView.Clear()
-				fmt.Fprintf(v.textView, "[red]Stream error: %v[-]\n\n", err)
-				fmt.Fprintf(v.textView, "[::d]Log URL: %s[-:-:-]\n", build.LogURL)
-			})
-			return
+			if attempt == maxRetries {
+				v.app.QueueUpdateDraw(func() {
+					fmt.Fprintf(v.textView, "\n[red]Stream error: %v[-]\n", err)
+					fmt.Fprintf(v.textView, "[::d]Log URL: %s[-:-:-]\n", build.LogURL)
+				})
+				return
+			}
+			continue
 		}
 
 		v.mu.Lock()
 		v.streamer = streamer
 		v.mu.Unlock()
 
-		v.app.QueueUpdateDraw(func() {
-			v.textView.Clear()
-		})
+		if attempt == 0 {
+			v.app.QueueUpdateDraw(func() {
+				v.textView.Clear()
+			})
+		}
 
-		var buf strings.Builder
-		var bufMu sync.Mutex
-		done := make(chan struct{})
+		disconnected := v.readStream(streamer)
 
-		go func() {
-			defer close(done)
-			for {
-				msg, err := streamer.ReadMessage()
-				if err != nil {
-					bufMu.Lock()
-					buf.WriteString("\n[::d]--- stream ended ---[-:-:-]\n")
-					bufMu.Unlock()
-					return
-				}
-				bufMu.Lock()
-				buf.WriteString(msg)
-				bufMu.Unlock()
-			}
-		}()
+		v.mu.Lock()
+		v.streamer = nil
+		v.mu.Unlock()
+		streamer.Close()
 
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
+		if !disconnected {
+			return
+		}
+	}
+
+	v.app.QueueUpdateDraw(func() {
+		fmt.Fprintf(v.textView, "\n[red::b]Stream lost after %d retries[-:-:-]\n", maxRetries)
+		v.textView.ScrollToEnd()
+	})
+}
+
+// readStream reads from the WebSocket and flushes to the UI.
+// Returns true if the stream disconnected (should retry), false if stopped by user.
+func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
+	var buf strings.Builder
+	var bufMu sync.Mutex
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
 		for {
-			select {
-			case <-v.stopCh:
+			msg, err := streamer.ReadMessage()
+			if err != nil {
 				return
-			case <-done:
-				bufMu.Lock()
-				remaining := buf.String()
-				buf.Reset()
-				bufMu.Unlock()
-				if remaining != "" {
-					v.app.QueueUpdateDraw(func() {
-						fmt.Fprint(v.textView, remaining)
-						v.textView.ScrollToEnd()
-					})
-				}
-				return
-			case <-ticker.C:
-				bufMu.Lock()
-				chunk := buf.String()
-				buf.Reset()
-				bufMu.Unlock()
-				if chunk != "" {
-					v.app.QueueUpdateDraw(func() {
-						fmt.Fprint(v.textView, chunk)
-						v.textView.ScrollToEnd()
-					})
-				}
 			}
+			bufMu.Lock()
+			buf.WriteString(msg)
+			bufMu.Unlock()
 		}
 	}()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-v.stopCh:
+			return false
+		case <-done:
+			bufMu.Lock()
+			remaining := buf.String()
+			buf.Reset()
+			bufMu.Unlock()
+			if remaining != "" {
+				v.app.QueueUpdateDraw(func() {
+					fmt.Fprint(v.textView, remaining)
+					v.textView.ScrollToEnd()
+				})
+			}
+			return true
+		case <-ticker.C:
+			bufMu.Lock()
+			chunk := buf.String()
+			buf.Reset()
+			bufMu.Unlock()
+			if chunk != "" {
+				v.app.QueueUpdateDraw(func() {
+					fmt.Fprint(v.textView, chunk)
+					v.textView.ScrollToEnd()
+				})
+			}
+		}
+	}
 }
 
 func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
