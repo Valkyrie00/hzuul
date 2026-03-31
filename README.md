@@ -11,8 +11,9 @@ Monitor pipelines, browse builds, stream logs, and manage your Zuul instance —
 ## Features
 
 - **Status Dashboard** — Pipeline cards with color-coded build status (like the web UI)
-- **All Views** — Projects, Jobs, Labels, Nodes, Autoholds, Semaphores, Builds, Buildsets
+- **All Views** — Projects, Jobs, Labels, Nodes, Autoholds, Semaphores, Builds, Buildsets, Downloads
 - **Build Detail** — Full build info with log streaming via WebSocket
+- **Download Logs** — Download full build logs to disk with concurrent workers, background progress, and persistent history
 - **Tenant Picker** — Switch between tenants on the fly
 - **Kerberos Auth** — SPNEGO authentication for enterprise Zuul instances
 - **Multi-Instance** — Config profiles for multiple Zuul deployments (like kubeconfig)
@@ -110,15 +111,32 @@ hzuul --context opendev
 
 | Key           | Action                    |
 | ------------- | ------------------------- |
-| `1`-`9`       | Switch to view            |
+| `1`-`9`, `0`  | Switch to view (0=Downloads) |
 | `Tab`         | Next view                 |
 | `Shift+Tab`   | Previous view             |
 | `r`           | Refresh current view      |
 | `t`           | Change tenant             |
 | `Enter`       | Open detail               |
 | `l`           | Stream log (Builds view)  |
+| `d`           | Download logs (Build detail) |
 | `q` / `Esc`   | Quit / Back               |
 | `?`           | Help                      |
+
+## Download Logs
+
+Press `d` in any build detail view to download the full build logs to disk.
+
+- A path prompt appears pre-filled with `~/.hzuul/logs/<tenant>/<uuid>/`
+- Downloads run in the background — navigate away while they complete
+- The **Downloads** tab (`0`) shows all active and past downloads with status, progress, and size
+- History is persisted in `~/.hzuul/history.json` across sessions
+- 10 concurrent workers for fast throughput
+
+| Key (Downloads view) | Action              |
+| -------------------- | ------------------- |
+| `d`                  | Remove from history |
+| `x`                  | Cancel active download |
+| `o`                  | Open download directory |
 
 ## CLI Flags
 
