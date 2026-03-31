@@ -26,6 +26,7 @@ type App struct {
 	filterPos       int
 	filterOpen      bool
 	filterTimer     *time.Timer
+	quitPending     bool
 	client          *api.Client
 	cfg             *config.Config
 	version         string
@@ -144,6 +145,10 @@ const footerKeysBase = " [#3884f4]?[-:-:-][::d]:help[-:-:-]  [#3884f4]t[-:-:-][:
 
 func (a *App) updateFooterKeysText() {
 	a.footerKeys.Clear()
+	if a.quitPending {
+		fmt.Fprint(a.footerKeys, " [yellow::b]Quit HZUUL?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]")
+		return
+	}
 	if a.filterOpen {
 		runes := []rune(a.filterText)
 		before := string(runes[:a.filterPos])
@@ -247,6 +252,17 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	}
 
+	if a.quitPending {
+		switch event.Rune() {
+		case 'y', 'Y':
+			a.app.Stop()
+		default:
+			a.quitPending = false
+			a.updateFooterKeysText()
+		}
+		return nil
+	}
+
 	if a.filterOpen {
 		runes := []rune(a.filterText)
 		switch event.Key() {
@@ -312,7 +328,8 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 
 	switch event.Rune() {
 	case 'q':
-		a.showQuitConfirm()
+		a.quitPending = true
+		a.updateFooterKeysText()
 		return nil
 	case 'r':
 		idx := a.nav.Active()
@@ -452,34 +469,6 @@ func (a *App) showError(context string, err error) {
 		return event
 	})
 	a.pages.AddAndSwitchToPage("error", center(text, 60, 10), true)
-}
-
-func (a *App) showQuitConfirm() {
-	modal := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter).
-		SetText("\n\n [::b]Quit HZUUL?[-:-:-]\n\n [#78788c]Press[-:-:-] [#48c78e::b]y[-:-:-] [#78788c]to confirm or[-:-:-] [#eb5757::b]n[-:-:-][#78788c]")
-	modal.SetBorder(true).
-		SetTitle(" Quit ").
-		SetBorderColor(views.ColorSep)
-
-	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'y', 'Y':
-			a.app.Stop()
-			return nil
-		case 'n', 'N', 'q':
-			a.dismissModal("quit")
-			return nil
-		}
-		if event.Key() == tcell.KeyEsc {
-			a.dismissModal("quit")
-			return nil
-		}
-		return event
-	})
-
-	a.pages.AddAndSwitchToPage("quit", center(modal, 46, 8), true)
 }
 
 func (a *App) dismissModal(name string) {
