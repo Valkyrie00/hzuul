@@ -45,7 +45,7 @@ type StatusView struct {
 	filter             string
 }
 
-func NewStatusView(app *tview.Application) *StatusView {
+func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -53,7 +53,7 @@ func NewStatusView(app *tview.Application) *StatusView {
 	table.SetSelectedStyle(tcell.StyleDefault.
 		Background(ColorSelectBg))
 
-	logView := NewBuildLogView(app)
+	logView := NewBuildLogView(app, dlManager)
 	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)

@@ -30,6 +30,7 @@ type App struct {
 	cfg             *config.Config
 	version         string
 	views           []views.View
+	dlManager       *views.DownloadManager
 	stopCh          chan struct{}
 	refreshInterval time.Duration
 }
@@ -67,10 +68,20 @@ func New(cfg *config.Config, version string) (*App, error) {
 		refreshInterval: defaultRefreshInterval,
 	}
 
+	a.dlManager = views.NewDownloadManager(a.app)
 	a.header = a.buildHeader(ctx)
 	a.buildFooter()
 	a.nav = NewNavBar(a.switchView)
 	a.views = a.buildViews()
+
+	a.dlManager.SetOnChange(func() {
+		count := a.dlManager.ActiveDownloadCount()
+		if count > 0 {
+			a.nav.SetBadge(9, fmt.Sprintf("%d", count))
+		} else {
+			a.nav.SetBadge(9, "")
+		}
+	})
 
 	for i, v := range a.views {
 		a.pages.AddPage(tabNames[i], v.Root(), true, i == 0)
@@ -173,15 +184,16 @@ func (a *App) applyFilter() {
 
 func (a *App) buildViews() []views.View {
 	return []views.View{
-		views.NewStatusView(a.app),
-		views.NewProjectsView(a.app),
-		views.NewJobsView(a.app),
+		views.NewStatusView(a.app, a.dlManager),
+		views.NewProjectsView(a.app, a.dlManager),
+		views.NewJobsView(a.app, a.dlManager),
 		views.NewLabelsView(a.app),
 		views.NewNodesView(a.app),
 		views.NewAutoholdsView(a.app),
 		views.NewSemaphoresView(a.app),
-		views.NewBuildsView(a.app),
-		views.NewBuildsetsView(a.app),
+		views.NewBuildsView(a.app, a.dlManager),
+		views.NewBuildsetsView(a.app, a.dlManager),
+		views.NewDownloadsView(a.app, a.dlManager),
 	}
 }
 
@@ -327,7 +339,7 @@ func (a *App) showHelp() {
 	helpText := ` [::b]Keybindings[-:-:-]
 
  [#3884f4]Navigation[-:-:-]
-   1-9         Switch to view
+   1-9, 0      Switch to view (0=Downloads)
    Tab         Next view
    Shift+Tab   Previous view
 
@@ -336,6 +348,7 @@ func (a *App) showHelp() {
    t           Change tenant
    Enter       Open detail (in tables)
    l           Stream log (in Builds)
+   d           Download logs (in Build detail)
    q / Esc     Quit / Back
 
  [#3884f4]Tables[-:-:-]

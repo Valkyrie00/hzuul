@@ -31,7 +31,7 @@ type BuildsetsView struct {
 	onLog        bool
 }
 
-func NewBuildsetsView(app *tview.Application) *BuildsetsView {
+func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *BuildsetsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -83,7 +83,7 @@ func NewBuildsetsView(app *tview.Application) *BuildsetsView {
 		AddItem(keysRow, 1, 0, false)
 	tableWithKeys.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app)
+	logView := NewBuildLogView(app, dlManager)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).

@@ -37,8 +37,13 @@ func (c *Context) SSLVerify() bool {
 }
 
 func defaultPath() string {
+	return filepath.Join(DataDir(), "config.yaml")
+}
+
+// DataDir returns the base directory for all hzuul data (~/.hzuul/).
+func DataDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "hzuul", "config.yaml")
+	return filepath.Join(home, ".hzuul")
 }
 
 func Load(path string) (*Config, error) {
@@ -49,7 +54,9 @@ func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return defaultConfig(), nil
+			cfg := defaultConfig()
+			_ = cfg.Save(path)
+			return cfg, nil
 		}
 		return nil, fmt.Errorf("reading config %s: %w", path, err)
 	}

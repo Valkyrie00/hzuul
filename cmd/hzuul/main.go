@@ -26,7 +26,7 @@ func main() {
 		SilenceUsage: true,
 	}
 
-	root.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.config/hzuul/config.yaml)")
+	root.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.hzuul/config.yaml)")
 	root.PersistentFlags().String("context", "", "use a specific context from config")
 	root.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug logging")
 

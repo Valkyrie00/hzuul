@@ -46,7 +46,7 @@ make build
 
 ## Configuration
 
-HZUUL uses a YAML config at `~/.config/hzuul/config.yaml`.
+HZUUL uses a YAML config at `~/.hzuul/config.yaml`.
 
 On first run without a config, HZUUL defaults to `zuul.opendev.org` (public, no auth).
 
@@ -123,7 +123,7 @@ hzuul --context opendev
 ## CLI Flags
 
 ```
---config <path>    Config file (default: ~/.config/hzuul/config.yaml)
+--config <path>    Config file (default: ~/.hzuul/config.yaml)
 --context <name>   Use a specific context
 --version          Show version
 ```

@@ -25,7 +25,7 @@ type ProjectsView struct {
 	page         string // "table", "builds", "detail"
 }
 
-func NewProjectsView(app *tview.Application) *ProjectsView {
+func NewProjectsView(app *tview.Application, dlManager *DownloadManager) *ProjectsView {
 	bg := ColorBg
 	navBg := ColorNavBg
 
@@ -64,7 +64,7 @@ func NewProjectsView(app *tview.Application) *ProjectsView {
 		AddItem(buildKeys, 1, 0, false)
 	buildPage.SetBackgroundColor(bg)
 
-	logView := NewBuildLogView(app)
+	logView := NewBuildLogView(app, dlManager)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).

@@ -120,7 +120,7 @@ main() {
 
     echo ""
     echo -e "  Run ${BLUE}${BOLD}hzuul${NC} to get started."
-    echo -e "  Config: ${BOLD}~/.config/hzuul/config.yaml${NC}"
+    echo -e "  Config: ${BOLD}~/.hzuul/config.yaml${NC}"
     echo -e "  Docs:   ${BLUE}https://github.com/${REPO}${NC}"
     echo ""
 }

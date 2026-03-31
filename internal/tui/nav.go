@@ -18,11 +18,13 @@ var tabNames = []string{
 	"Semaphores",
 	"Builds",
 	"Buildsets",
+	"Downloads",
 }
 
 type NavBar struct {
 	*tview.TextView
 	active int
+	badges map[int]string
 	onTab  func(index int)
 }
 
@@ -35,10 +37,27 @@ func NewNavBar(onTab func(int)) *NavBar {
 	n := &NavBar{
 		TextView: tv,
 		active:   0,
+		badges:   make(map[int]string),
 		onTab:    onTab,
 	}
 	n.render()
 	return n
+}
+
+func (n *NavBar) SetBadge(index int, badge string) {
+	if badge == "" {
+		delete(n.badges, index)
+	} else {
+		n.badges[index] = badge
+	}
+	n.render()
+}
+
+func tabShortcut(i int) string {
+	if i == 9 {
+		return "0"
+	}
+	return fmt.Sprintf("%d", i+1)
 }
 
 func (n *NavBar) render() {
@@ -48,11 +67,23 @@ func (n *NavBar) render() {
 		if i > 0 {
 			fmt.Fprint(n, "  ")
 		}
-		shortcut := fmt.Sprintf("%d", i+1)
+		shortcut := tabShortcut(i)
+		badge := ""
+		if b, ok := n.badges[i]; ok {
+			badge = fmt.Sprintf(" [yellow::b](%s)[-::-]", b)
+		}
 		if i == n.active {
-			fmt.Fprintf(n, "[#DCDCE6::b]%s·%s[-::-]", shortcut, name)
+			if badge != "" {
+				fmt.Fprintf(n, "[yellow::b]%s·%s%s[-::-]", shortcut, name, badge)
+			} else {
+				fmt.Fprintf(n, "[#DCDCE6::b]%s·%s[-::-]", shortcut, name)
+			}
 		} else {
-			fmt.Fprintf(n, "[#3884F4]%s[-][#78788C]·%s[-]", shortcut, name)
+			if badge != "" {
+				fmt.Fprintf(n, "[yellow]%s[-][yellow]·%s%s[-]", shortcut, name, badge)
+			} else {
+				fmt.Fprintf(n, "[#3884F4]%s[-][#78788C]·%s[-]", shortcut, name)
+			}
 		}
 	}
 }
@@ -90,6 +121,10 @@ func (n *NavBar) HandleKey(event *tcell.EventKey) bool {
 			n.SetActive(idx)
 			return true
 		}
+	}
+	if r == '0' && len(tabNames) >= 10 {
+		n.SetActive(9)
+		return true
 	}
 	return false
 }

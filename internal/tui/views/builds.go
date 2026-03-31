@@ -12,7 +12,9 @@ type BuildsView struct {
 	root       *tview.Flex
 	table      *tview.Table
 	countLabel *tview.TextView
+	dlLabel    *tview.TextView
 	logView    *BuildLogView
+	dlManager  *DownloadManager
 	pages      *tview.Pages
 	app        *tview.Application
 	client     *api.Client
@@ -26,7 +28,7 @@ type BuildsView struct {
 	onDetail bool
 }
 
-func NewBuildsView(app *tview.Application) *BuildsView {
+func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -36,11 +38,15 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	countLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
 	countLabel.SetBackgroundColor(ColorBg)
 
+	dlLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
+	dlLabel.SetBackgroundColor(ColorNavBg)
+
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
 
 	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(keys, 0, 1, false).
+		AddItem(dlLabel, 22, 0, false).
 		AddItem(countLabel, 20, 0, false)
 	keysRow.SetBackgroundColor(ColorNavBg)
 	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]l[-:-:-][::d]:stream log[-:-:-]  [#3884f4]/[-:-:-][::d]:search[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
@@ -50,7 +56,7 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 		AddItem(keysRow, 1, 0, false)
 	tableWithKeys.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app)
+	logView := NewBuildLogView(app, dlManager)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).
@@ -64,10 +70,16 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 		root:       root,
 		table:      table,
 		countLabel: countLabel,
+		dlLabel:    dlLabel,
 		logView:    logView,
+		dlManager:  dlManager,
 		pages:      pages,
 		app:        app,
 	}
+
+	dlManager.SetOnChange(func() {
+		v.updateDLLabel()
+	})
 
 	table.SetSelectedFunc(func(row, _ int) {
 		if v.loading {
@@ -121,6 +133,20 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	})
 
 	return v
+}
+
+func (v *BuildsView) updateDLLabel() {
+	v.dlLabel.Clear()
+	for _, r := range v.dlManager.Records() {
+		if r.Status == DLDownloading {
+			pct := 0
+			if r.TotalFiles > 0 {
+				pct = r.DoneFiles * 100 / r.TotalFiles
+			}
+			fmt.Fprintf(v.dlLabel, "[yellow::b]↓[-:-:-][::d] %d%% (%d/%d)[-:-:-] ", pct, r.DoneFiles, r.TotalFiles)
+			return
+		}
+	}
 }
 
 func (v *BuildsView) Root() tview.Primitive { return v.root }

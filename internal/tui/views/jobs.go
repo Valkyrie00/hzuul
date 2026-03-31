@@ -29,7 +29,7 @@ type JobsView struct {
 	page        string // "table", "detail", "builds", "buildlog"
 }
 
-func NewJobsView(app *tview.Application) *JobsView {
+func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 	bg := ColorBg
 	navBg := ColorNavBg
 
@@ -97,7 +97,7 @@ func NewJobsView(app *tview.Application) *JobsView {
 		AddItem(buildKeys, 1, 0, false)
 	buildPage.SetBackgroundColor(bg)
 
-	logView := NewBuildLogView(app)
+	logView := NewBuildLogView(app, dlManager)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).

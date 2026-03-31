@@ -171,6 +171,27 @@ func (c *Client) setBearerToken(req *http.Request) {
 	}
 }
 
+// RawGet performs an authenticated GET to an arbitrary absolute URL.
+func (c *Client) RawGet(rawURL string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request for %s: %w", rawURL, err)
+	}
+
+	resp, err := c.doer.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET %s: %w", rawURL, err)
+	}
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("GET %s: %s — %s", rawURL, resp.Status, string(body))
+	}
+
+	return resp, nil
+}
+
 func (c *Client) tenantPath(suffix string) string {
 	return fmt.Sprintf("/api/tenant/%s/%s", c.tenant, suffix)
 }

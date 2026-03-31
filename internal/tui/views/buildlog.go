@@ -17,6 +17,8 @@ type BuildLogView struct {
 	root        *tview.Flex
 	textView    *tview.TextView
 	header      *tview.TextView
+	keys        *tview.TextView
+	pathInput   *tview.InputField
 	app         *tview.Application
 	streamer    *api.LogStreamer
 	mu          sync.Mutex
@@ -24,9 +26,16 @@ type BuildLogView struct {
 	openURL     string
 	logURL      string
 	baseContent string
+
+	client      *api.Client
+	build       *api.Build
+	dlManager   *DownloadManager
+	onBack      func()
+	isStatic    bool
+	inputActive bool
 }
 
-func NewBuildLogView(app *tview.Application) *BuildLogView {
+func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildLogView {
 	bg := ColorBg
 	dimColor := ColorSep
 
@@ -55,7 +64,14 @@ func NewBuildLogView(app *tview.Application) *BuildLogView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]d[-:-:-][::d]:download logs[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+
+	pathInput := tview.NewInputField()
+	pathInput.SetBackgroundColor(navBg)
+	pathInput.SetFieldBackgroundColor(navBg)
+	pathInput.SetFieldTextColor(tcell.ColorWhite)
+	pathInput.SetLabelColor(ColorAccent)
+	pathInput.SetLabel(" Download to: ")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
@@ -65,10 +81,13 @@ func NewBuildLogView(app *tview.Application) *BuildLogView {
 	root.SetBackgroundColor(bg)
 
 	return &BuildLogView{
-		root:     root,
-		textView: textView,
-		header:   header,
-		app:      app,
+		root:      root,
+		textView:  textView,
+		header:    header,
+		keys:      keys,
+		pathInput: pathInput,
+		app:       app,
+		dlManager: dlManager,
 	}
 }
 
@@ -77,7 +96,11 @@ func (v *BuildLogView) Root() tview.Primitive { return v.root }
 func (v *BuildLogView) Load(_ *api.Client) {}
 
 func (v *BuildLogView) SetBackHandler(onBack func()) {
+	v.onBack = onBack
 	v.root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if v.inputActive {
+			return event
+		}
 		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
 			v.Stop()
 			onBack()
@@ -91,14 +114,71 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 			openURL(v.logURL)
 			return nil
 		}
+		downloading := v.build != nil && v.dlManager != nil && v.dlManager.IsDownloading(v.build.UUID)
+		if event.Rune() == 'd' && v.isStatic && !downloading && v.dlManager != nil && v.build != nil && v.build.LogURL != "" {
+			v.showPathPrompt()
+			return nil
+		}
 		return event
 	})
+}
+
+func (v *BuildLogView) defaultDownloadDir() string {
+	tenant := ""
+	if v.client != nil {
+		tenant = v.client.Tenant()
+	}
+	uuid := ""
+	if v.build != nil {
+		uuid = v.build.UUID
+	}
+	return DefaultDownloadDir(tenant, uuid)
+}
+
+func (v *BuildLogView) showPathPrompt() {
+	v.inputActive = true
+	v.pathInput.SetText(v.defaultDownloadDir())
+
+	v.pathInput.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEnter:
+			dest := strings.TrimSpace(v.pathInput.GetText())
+			if dest == "" {
+				return
+			}
+			v.hidePathPrompt()
+			v.startDownload(dest)
+		case tcell.KeyEsc:
+			v.hidePathPrompt()
+		}
+	})
+
+	v.root.RemoveItem(v.keys)
+	v.root.AddItem(v.pathInput, 1, 0, true)
+	v.app.SetFocus(v.pathInput)
+}
+
+func (v *BuildLogView) hidePathPrompt() {
+	v.inputActive = false
+	v.root.RemoveItem(v.pathInput)
+	v.root.AddItem(v.keys, 1, 0, false)
+	v.app.SetFocus(v.textView)
+}
+
+func (v *BuildLogView) startDownload(destDir string) {
+	v.dlManager.Start(v.client, v.build, destDir, nil)
+	if v.onBack != nil {
+		v.onBack()
+	}
 }
 
 func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.Stop()
 	v.logURL = build.LogURL
 	v.openURL = build.LogURL
+	v.client = client
+	v.build = build
+	v.isStatic = false
 
 	v.header.Clear()
 	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s",
@@ -226,6 +306,9 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	v.Stop()
 	v.logURL = build.LogURL
+	v.client = client
+	v.build = build
+	v.isStatic = true
 	if client != nil {
 		v.openURL = client.BuildURL(build.UUID)
 	} else {
