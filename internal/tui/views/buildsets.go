@@ -114,6 +114,9 @@ func NewBuildsetsView(app *tview.Application) *BuildsetsView {
 	})
 
 	table.SetSelectedFunc(func(row, _ int) {
+		if v.loading {
+			return
+		}
 		idx := row - 1
 		if idx < 0 || idx >= len(v.buildsets) {
 			return
@@ -161,6 +164,8 @@ func (v *BuildsetsView) SetFilter(term string) {
 	v.curFilter = parseBuildsetFilter(term)
 	v.skip = 0
 	v.noMore = false
+	v.countLabel.Clear()
+	fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
 	v.searchServer()
 }
 

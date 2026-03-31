@@ -70,18 +70,28 @@ func NewBuildsView(app *tview.Application) *BuildsView {
 	}
 
 	table.SetSelectedFunc(func(row, _ int) {
+		if v.loading {
+			return
+		}
 		idx := v.buildIndex(row)
-		if idx < 0 {
+		if idx < 0 || v.client == nil {
 			return
 		}
 		build := v.builds[idx]
-		v.logView.ShowStaticLog(v.client, &build)
+		if build.Result == "" && build.UUID != "" {
+			v.logView.StreamBuild(v.client, &build)
+		} else {
+			v.logView.ShowStaticLog(v.client, &build)
+		}
 		v.pages.SwitchToPage("detail")
 		v.onDetail = true
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'l' {
+			if v.loading {
+				return nil
+			}
 			row, _ := table.GetSelection()
 			idx := v.buildIndex(row)
 			if idx >= 0 && v.client != nil {
@@ -123,6 +133,8 @@ func (v *BuildsView) SetFilter(term string) {
 	v.curFilter = parseBuildFilter(term)
 	v.skip = 0
 	v.noMore = false
+	v.countLabel.Clear()
+	fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
 	v.searchServer()
 }
 

@@ -55,7 +55,7 @@ func resultColor(result string) tcell.Color {
 func resultCell(result string) *tview.TableCell {
 	display := result
 	if display == "" {
-		display = "running"
+		display = "RUNNING"
 	}
 	return tview.NewTableCell(" " + display).SetTextColor(resultColor(result))
 }
