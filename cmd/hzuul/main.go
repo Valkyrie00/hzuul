@@ -52,7 +52,7 @@ func run(cmd *cobra.Command, args []string) error {
 		cfg.CurrentContext = ctxName
 	}
 
-	app, err := tui.New(cfg)
+	app, err := tui.New(cfg, version)
 	if err != nil {
 		return err
 	}

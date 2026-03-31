@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -27,12 +28,13 @@ type App struct {
 	filterTimer     *time.Timer
 	client          *api.Client
 	cfg             *config.Config
+	version         string
 	views           []views.View
 	stopCh          chan struct{}
 	refreshInterval time.Duration
 }
 
-func New(cfg *config.Config) (*App, error) {
+func New(cfg *config.Config, version string) (*App, error) {
 	ctx, err := cfg.Active()
 	if err != nil {
 		return nil, err
@@ -60,6 +62,7 @@ func New(cfg *config.Config) (*App, error) {
 		pages:           tview.NewPages(),
 		cfg:             cfg,
 		client:          client,
+		version:         version,
 		stopCh:          make(chan struct{}),
 		refreshInterval: defaultRefreshInterval,
 	}
@@ -100,8 +103,8 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	tv.SetBackgroundColor(views.ColorHeaderBg)
-	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]│[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
-		ctx.URL, ctx.Tenant, a.cfg.CurrentContext)
+	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
+		strings.ToUpper(a.version), ctx.URL, ctx.Tenant, a.cfg.CurrentContext)
 	return tv
 }
 
@@ -396,8 +399,8 @@ func (a *App) showTenantPicker() {
 					a.client.SetTenant(name)
 					a.header.Clear()
 					ctx, _ := a.cfg.Active()
-					fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]│[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
-						ctx.URL, name, a.cfg.CurrentContext)
+					fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
+						strings.ToUpper(a.version), ctx.URL, name, a.cfg.CurrentContext)
 					a.dismissModal("tenants")
 					idx := a.nav.Active()
 					a.views[idx].Load(a.client)
