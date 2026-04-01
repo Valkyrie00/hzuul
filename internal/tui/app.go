@@ -32,6 +32,7 @@ type App struct {
 	version         string
 	views           []views.View
 	dlManager       *views.DownloadManager
+	bmManager       *views.BookmarkManager
 	stopCh          chan struct{}
 	refreshInterval time.Duration
 }
@@ -64,6 +65,7 @@ func New(cfg *config.Config, version string) (*App, error) {
 	}
 
 	a.dlManager = views.NewDownloadManager(a.app)
+	a.bmManager = views.NewBookmarkManager()
 	a.header = a.buildHeader(ctx)
 	a.buildFooter()
 	a.nav = NewNavBar(a.switchView)
@@ -215,7 +217,7 @@ func (a *App) applyFilter() {
 }
 
 func (a *App) buildViews() []views.View {
-	return []views.View{
+	vv := []views.View{
 		views.NewStatusView(a.app, a.dlManager),
 		views.NewProjectsView(a.app, a.dlManager),
 		views.NewJobsView(a.app, a.dlManager),
@@ -226,7 +228,14 @@ func (a *App) buildViews() []views.View {
 		views.NewBuildsView(a.app, a.dlManager),
 		views.NewBuildsetsView(a.app, a.dlManager),
 		views.NewDownloadsView(a.app, a.dlManager),
+		views.NewBookmarksView(a.app, a.bmManager, a.dlManager),
 	}
+	for _, v := range vv {
+		if bv, ok := v.(views.BookmarkAwareView); ok {
+			bv.SetBookmarkManager(a.bmManager)
+		}
+	}
+	return vv
 }
 
 func (a *App) switchView(index int) {
@@ -391,6 +400,7 @@ func (a *App) showHelp() {
 
  [#3884f4]Navigation[-:-:-]
    1-9, 0      Switch to view (0=Downloads)
+   b           Bookmarks
    Tab         Next view
    Shift+Tab   Previous view
 
@@ -400,6 +410,8 @@ func (a *App) showHelp() {
    Enter       Open detail (in tables)
    l           Stream log (in Builds)
    d           Download logs (in Build detail)
+   s           Save bookmark (in Build detail)
+   c           Open change/MR/PR (in Build detail)
    q / Esc     Quit / Back
 
  [#3884f4]Tables[-:-:-]

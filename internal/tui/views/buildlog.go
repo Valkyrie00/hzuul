@@ -30,6 +30,7 @@ type BuildLogView struct {
 	client      *api.Client
 	build       *api.Build
 	dlManager   *DownloadManager
+	bmManager   *BookmarkManager
 	onBack      func()
 	isStatic    bool
 	inputActive bool
@@ -64,7 +65,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildL
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	pathInput := tview.NewInputField()
 	pathInput.SetBackgroundColor(navBg)
@@ -93,6 +94,10 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildL
 
 func (v *BuildLogView) Root() tview.Primitive { return v.root }
 
+func (v *BuildLogView) SetBookmarkManager(bm *BookmarkManager) {
+	v.bmManager = bm
+}
+
 func (v *BuildLogView) Load(_ *api.Client) {}
 
 func (v *BuildLogView) SetBackHandler(onBack func()) {
@@ -118,6 +123,11 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 			openURL(v.build.Ref.RefURL)
 			return nil
 		}
+		if event.Rune() == 's' && v.bmManager != nil && v.build != nil {
+			added := v.bmManager.Toggle(v.client, v.build)
+			v.updateBookmarkHeader(added)
+			return nil
+		}
 		downloading := v.build != nil && v.dlManager != nil && v.dlManager.IsDownloading(v.build.UUID)
 		if event.Rune() == 'd' && v.isStatic && !downloading && v.dlManager != nil && v.build != nil && v.build.LogURL != "" {
 			v.showPathPrompt()
@@ -125,6 +135,21 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 		}
 		return event
 	})
+}
+
+func (v *BuildLogView) updateBookmarkHeader(added bool) {
+	if v.build == nil {
+		return
+	}
+	bookmark := ""
+	if added {
+		bookmark = " [yellow]*BOOKMARKED*[-]"
+	} else if v.bmManager != nil && v.bmManager.IsBookmarked(v.build.UUID) {
+		bookmark = " [yellow]*BOOKMARKED*[-]"
+	}
+	v.header.Clear()
+	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ %s%s",
+		v.build.JobName, v.build.Ref.Project, v.build.Ref.Branch, bookmark)
 }
 
 func (v *BuildLogView) defaultDownloadDir() string {
@@ -184,9 +209,13 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.build = build
 	v.isStatic = false
 
+	bookmark := ""
+	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
+		bookmark = " [yellow]*BOOKMARKED*[-]"
+	}
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s",
-		build.JobName, build.Ref.Project, build.Ref.Branch)
+	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
+		build.JobName, build.Ref.Project, build.Ref.Branch, bookmark)
 
 	v.textView.Clear()
 	fmt.Fprintln(v.textView, "[::d]Connecting to log stream...[-:-:-]")
@@ -318,9 +347,13 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	} else {
 		v.openURL = build.LogURL
 	}
+	bookmark := ""
+	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
+		bookmark = " [yellow]*BOOKMARKED*[-]"
+	}
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ %s",
-		build.JobName, build.Ref.Project, build.Ref.Branch)
+	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ %s%s",
+		build.JobName, build.Ref.Project, build.Ref.Branch, bookmark)
 
 	thinLine := "────────────────────────────────────────────────────────────────────────────────"
 

@@ -171,7 +171,8 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 	return v
 }
 
-func (v *StatusView) Root() tview.Primitive { return v.root }
+func (v *StatusView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
+func (v *StatusView) Root() tview.Primitive                   { return v.root }
 
 func (v *StatusView) SetFilter(term string) {
 	v.filter = term

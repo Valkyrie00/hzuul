@@ -135,7 +135,8 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager) *Projec
 	return v
 }
 
-func (v *ProjectsView) Root() tview.Primitive { return v.root }
+func (v *ProjectsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
+func (v *ProjectsView) Root() tview.Primitive                   { return v.root }
 
 func (v *ProjectsView) SetFilter(term string) {
 	v.filter = term

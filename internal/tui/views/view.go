@@ -17,3 +17,9 @@ type View interface {
 type ModalView interface {
 	IsModal() bool
 }
+
+// BookmarkAwareView can be implemented by views that contain a BuildLogView
+// and need the BookmarkManager injected after construction.
+type BookmarkAwareView interface {
+	SetBookmarkManager(bm *BookmarkManager)
+}

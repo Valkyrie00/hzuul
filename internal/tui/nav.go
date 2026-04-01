@@ -19,6 +19,7 @@ var tabNames = []string{
 	"Builds",
 	"Buildsets",
 	"Downloads",
+	"Bookmarks",
 }
 
 type NavBar struct {
@@ -54,10 +55,14 @@ func (n *NavBar) SetBadge(index int, badge string) {
 }
 
 func tabShortcut(i int) string {
-	if i == 9 {
+	switch i {
+	case 9:
 		return "0"
+	case 10:
+		return "b"
+	default:
+		return fmt.Sprintf("%d", i+1)
 	}
-	return fmt.Sprintf("%d", i+1)
 }
 
 func (n *NavBar) render() {
@@ -124,6 +129,10 @@ func (n *NavBar) HandleKey(event *tcell.EventKey) bool {
 	}
 	if r == '0' && len(tabNames) >= 10 {
 		n.SetActive(9)
+		return true
+	}
+	if r == 'b' && len(tabNames) >= 11 {
+		n.SetActive(10)
 		return true
 	}
 	return false

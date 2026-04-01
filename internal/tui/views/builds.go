@@ -149,7 +149,8 @@ func (v *BuildsView) updateDLLabel() {
 	}
 }
 
-func (v *BuildsView) Root() tview.Primitive { return v.root }
+func (v *BuildsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
+func (v *BuildsView) Root() tview.Primitive                   { return v.root }
 
 func (v *BuildsView) SetFilter(term string) {
 	v.filter = term

@@ -154,7 +154,8 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 	return v
 }
 
-func (v *BuildsetsView) Root() tview.Primitive { return v.root }
+func (v *BuildsetsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
+func (v *BuildsetsView) Root() tview.Primitive                   { return v.root }
 
 func (v *BuildsetsView) SetFilter(term string) {
 	v.filter = term

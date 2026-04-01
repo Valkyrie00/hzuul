@@ -191,7 +191,8 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 	return v
 }
 
-func (v *JobsView) Root() tview.Primitive { return v.root }
+func (v *JobsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
+func (v *JobsView) Root() tview.Primitive                   { return v.root }
 
 func (v *JobsView) SetFilter(term string) {
 	v.filter = term
