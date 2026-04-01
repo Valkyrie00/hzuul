@@ -64,7 +64,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildL
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]d[-:-:-][::d]:download logs[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	pathInput := tview.NewInputField()
 	pathInput.SetBackgroundColor(navBg)
@@ -112,6 +112,10 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 		}
 		if event.Rune() == 'l' && v.logURL != "" {
 			openURL(v.logURL)
+			return nil
+		}
+		if event.Rune() == 'c' && v.build != nil && v.build.Ref.RefURL != "" {
+			openURL(v.build.Ref.RefURL)
 			return nil
 		}
 		downloading := v.build != nil && v.dlManager != nil && v.dlManager.IsDownloading(v.build.UUID)
@@ -329,6 +333,9 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 		fmt.Fprintf(&b, "[bold]Change:[-]    %v,%v\n", build.Ref.Change, build.Ref.Patchset)
 	} else if build.Ref.Ref != "" {
 		fmt.Fprintf(&b, "[bold]Ref:[-]       %s\n", build.Ref.Ref)
+	}
+	if build.Ref.RefURL != "" {
+		fmt.Fprintf(&b, "[bold]Change URL:[-] %s\n", build.Ref.RefURL)
 	}
 	fmt.Fprintf(&b, "[bold]Result:[-]    %s\n", resultTag(build.Result))
 	fmt.Fprintf(&b, "[bold]Duration:[-]  %s\n", formatBuildDuration(build.Duration))
