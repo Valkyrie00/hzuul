@@ -69,7 +69,9 @@ func (n *NavBar) render() {
 	n.Clear()
 	fmt.Fprint(n, " ")
 	for i, name := range tabNames {
-		if i > 0 {
+		if i == 9 {
+			fmt.Fprint(n, "  [#78788C]│[-] ")
+		} else if i > 0 {
 			fmt.Fprint(n, "  ")
 		}
 		shortcut := tabShortcut(i)
