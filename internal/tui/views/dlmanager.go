@@ -155,23 +155,37 @@ func (dm *DownloadManager) Start(
 
 func (dm *DownloadManager) Cancel(uuid string) {
 	dm.mu.Lock()
+	var destDir string
 	if ch, ok := dm.stopChs[uuid]; ok {
 		close(ch)
 		delete(dm.stopChs, uuid)
 	}
+	if idx := dm.findLocked(uuid); idx >= 0 {
+		destDir = dm.records[idx].DestDir
+	}
 	dm.mu.Unlock()
+
+	if destDir != "" {
+		go os.RemoveAll(destDir)
+	}
 }
 
 func (dm *DownloadManager) Remove(uuid string) {
 	dm.mu.Lock()
+	var destDir string
 	if idx := dm.findLocked(uuid); idx >= 0 {
 		if dm.records[idx].Status == DLDownloading {
 			dm.mu.Unlock()
 			return
 		}
+		destDir = dm.records[idx].DestDir
 		dm.records = append(dm.records[:idx], dm.records[idx+1:]...)
 	}
 	dm.mu.Unlock()
+
+	if destDir != "" {
+		go os.RemoveAll(destDir)
+	}
 	dm.saveHistory()
 	dm.notify()
 }
