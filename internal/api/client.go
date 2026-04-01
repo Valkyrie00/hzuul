@@ -22,23 +22,30 @@ type Client struct {
 	tenant       string
 }
 
-func NewClient(ctx *config.Context) (*Client, error) {
+func NewClient(ctx *config.Context, onProgress func(string)) (*Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: !ctx.SSLVerify(),
 		},
 	}
 
+	progress := func(msg string) {
+		if onProgress != nil {
+			onProgress(msg)
+		}
+	}
+
 	var authProvider auth.Provider
 	switch strings.ToLower(ctx.Auth) {
 	case "kerberos":
 		baseURL := strings.TrimRight(ctx.URL, "/")
-		k, err := auth.NewKerberos(baseURL+"/api/tenants", ctx.SSLVerify(), ctx.CACert)
+		k, err := auth.NewKerberos(baseURL+"/api/tenants", ctx.SSLVerify(), ctx.CACert, onProgress)
 		if err != nil {
 			return nil, fmt.Errorf("kerberos auth: %w", err)
 		}
 		authProvider = k
 	default:
+		progress("Connecting...")
 		authProvider = &auth.NoAuth{}
 	}
 

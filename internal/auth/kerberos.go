@@ -30,27 +30,37 @@ type Kerberos struct {
 	verifySSL   bool
 	caCert      string
 	accessToken string
+	onProgress  func(string)
 }
 
 // NewKerberos bootstraps a Kerberos session by running curl --negotiate against
 // the given URL. The session cookies are captured and reused by the Go HTTP client.
 // It also attempts to obtain an OIDC Bearer token for admin write operations.
-func NewKerberos(targetURL string, verifySSL bool, caCert string) (*Kerberos, error) {
+func NewKerberos(targetURL string, verifySSL bool, caCert string, onProgress func(string)) (*Kerberos, error) {
+	progress := func(msg string) {
+		if onProgress != nil {
+			onProgress(msg)
+		}
+	}
+
 	if _, err := exec.LookPath("curl"); err != nil {
 		return nil, fmt.Errorf("curl not found in PATH — required for Kerberos auth")
 	}
 
+	progress("Verifying Kerberos ticket...")
 	if err := checkKerberosTicket(); err != nil {
 		return nil, err
 	}
 
 	jar, _ := cookiejar.New(nil)
-	k := &Kerberos{jar: jar, verifySSL: verifySSL, caCert: caCert}
+	k := &Kerberos{jar: jar, verifySSL: verifySSL, caCert: caCert, onProgress: progress}
 
+	progress("Authenticating via SPNEGO...")
 	if err := k.negotiate(targetURL); err != nil {
 		return nil, err
 	}
 
+	progress("Acquiring access token...")
 	if token, err := k.acquireOIDCToken(targetURL); err != nil {
 		slog.Debug("kerberos: could not acquire OIDC token (admin ops may fail)", "error", err)
 	} else {
@@ -58,6 +68,7 @@ func NewKerberos(targetURL string, verifySSL bool, caCert string) (*Kerberos, er
 		slog.Debug("kerberos: acquired OIDC bearer token for admin operations")
 	}
 
+	progress("Authentication complete")
 	return k, nil
 }
 

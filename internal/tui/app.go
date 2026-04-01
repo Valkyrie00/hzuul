@@ -42,11 +42,6 @@ func New(cfg *config.Config, version string) (*App, error) {
 		return nil, err
 	}
 
-	client, err := api.NewClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("creating API client: %w", err)
-	}
-
 	tview.Styles.PrimitiveBackgroundColor = tcell.ColorDefault
 	tview.Styles.ContrastBackgroundColor = tcell.ColorDefault
 	tview.Styles.MoreContrastBackgroundColor = tcell.ColorDefault
@@ -63,7 +58,6 @@ func New(cfg *config.Config, version string) (*App, error) {
 		app:             tview.NewApplication(),
 		pages:           tview.NewPages(),
 		cfg:             cfg,
-		client:          client,
 		version:         version,
 		stopCh:          make(chan struct{}),
 		refreshInterval: defaultRefreshInterval,
@@ -88,6 +82,12 @@ func New(cfg *config.Config, version string) (*App, error) {
 		a.pages.AddPage(tabNames[i], v.Root(), true, i == 0)
 	}
 
+	loadingText := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter)
+	loadingText.SetBackgroundColor(views.ColorBg)
+	a.pages.AddPage("loading", loadingText, true, true)
+
 	navSpacer := tview.NewBox()
 
 	layout := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -100,12 +100,39 @@ func New(cfg *config.Config, version string) (*App, error) {
 	a.app.SetRoot(layout, true)
 	a.app.SetInputCapture(a.globalInput)
 
+	go a.initClient(ctx, loadingText)
+
 	return a, nil
 }
 
+func (a *App) initClient(ctx *config.Context, loadingText *tview.TextView) {
+	setStatus := func(msg string) {
+		a.app.QueueUpdateDraw(func() {
+			loadingText.Clear()
+			fmt.Fprintf(loadingText, "\n\n\n [yellow]%s[-]", msg)
+		})
+	}
+
+	client, err := api.NewClient(ctx, setStatus)
+	if err != nil {
+		a.app.QueueUpdateDraw(func() {
+			loadingText.Clear()
+			fmt.Fprintf(loadingText, "\n\n\n [red::b]Error:[-:-:-] %v\n\n [::d]Press q to quit[-:-:-]", err)
+		})
+		return
+	}
+
+	a.app.QueueUpdateDraw(func() {
+		a.client = client
+		a.pages.RemovePage("loading")
+		a.pages.SwitchToPage(tabNames[0])
+		a.views[0].Load(a.client)
+		a.updateFooterTime()
+		go a.autoRefresh()
+	})
+}
+
 func (a *App) Run() error {
-	a.views[0].Load(a.client)
-	go a.autoRefresh()
 	defer close(a.stopCh)
 	return a.app.Run()
 }
@@ -203,7 +230,7 @@ func (a *App) buildViews() []views.View {
 }
 
 func (a *App) switchView(index int) {
-	if index < 0 || index >= len(tabNames) {
+	if index < 0 || index >= len(tabNames) || a.client == nil {
 		return
 	}
 	a.cancelFilterTimer()
@@ -259,6 +286,13 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		default:
 			a.quitPending = false
 			a.updateFooterKeysText()
+		}
+		return nil
+	}
+
+	if a.client == nil {
+		if event.Rune() == 'q' {
+			a.app.Stop()
 		}
 		return nil
 	}
