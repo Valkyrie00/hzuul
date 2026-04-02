@@ -57,7 +57,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true)
 	detailKeys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(detailKeys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(detailKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	detailFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHead, 0, 0, false).
@@ -71,7 +71,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 
 	tableKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	tableKeys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(tableKeys, " [#3884f4]enter[-:-:-][::d]:buildset detail[-:-:-]  [#3884f4]/[-:-:-][::d]:search[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(tableKeys, " [#3884f4]enter[-:-:-][::d]:buildset detail[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(tableKeys, 0, 1, false).
@@ -130,7 +130,11 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 			return
 		}
 		build := v.detailBuilds[idx]
-		v.logView.ShowStaticLog(v.client, &build)
+		if build.Result == "" && build.UUID != "" {
+			v.logView.StreamBuild(v.client, &build)
+		} else {
+			v.logView.ShowStaticLog(v.client, &build)
+		}
 		v.pages.SwitchToPage("log")
 		v.onLog = true
 	})
@@ -142,7 +146,15 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 			v.app.SetFocus(v.table)
 			return nil
 		}
-		return event
+		idx := func() int {
+			r, _ := detailTbl.GetSelection()
+			return r - 1
+		}()
+		if idx < 0 || idx >= len(v.detailBuilds) {
+			return event
+		}
+		build := v.detailBuilds[idx]
+		return handleBuildOpenKeys(event, v.client, &build)
 	})
 
 	logView.SetBackHandler(func() {

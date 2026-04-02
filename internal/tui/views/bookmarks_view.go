@@ -28,7 +28,7 @@ func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManage
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:open build[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:open build[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).

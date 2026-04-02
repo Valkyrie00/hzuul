@@ -49,7 +49,7 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsVi
 		AddItem(dlLabel, 22, 0, false).
 		AddItem(countLabel, 20, 0, false)
 	keysRow.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]l[-:-:-][::d]:stream log[-:-:-]  [#3884f4]/[-:-:-][::d]:search[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -100,24 +100,16 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsVi
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'l' {
-			if v.loading {
-				return nil
-			}
-			row, _ := table.GetSelection()
-			idx := v.buildIndex(row)
-			if idx >= 0 && v.client != nil {
-				build := v.builds[idx]
-				if build.UUID == "" {
-					return nil
-				}
-				v.logView.StreamBuild(v.client, &build)
-				v.pages.SwitchToPage("detail")
-				v.onDetail = true
-			}
-			return nil
+		if v.loading {
+			return event
 		}
-		return event
+		row, _ := table.GetSelection()
+		idx := v.buildIndex(row)
+		if idx < 0 || v.client == nil {
+			return event
+		}
+		build := v.builds[idx]
+		return handleBuildOpenKeys(event, v.client, &build)
 	})
 
 	table.SetSelectionChangedFunc(func(row, _ int) {
@@ -262,23 +254,6 @@ func (v *BuildsView) loadMore() {
 
 func setBuildHeader(table *tview.Table) {
 	setTableHeader(table, "Job", "Project", "Branch", "Duration", "Result", "Pipeline", "Change", "Start")
-}
-
-func formatChange(ref api.BuildRef) string {
-	if ref.Change == nil {
-		return ""
-	}
-	c := fmt.Sprintf("%v", ref.Change)
-	if c == "<nil>" || c == "" {
-		return ""
-	}
-	if ref.Patchset != nil {
-		p := fmt.Sprintf("%v", ref.Patchset)
-		if p != "" && p != "<nil>" {
-			return c + "," + p
-		}
-	}
-	return c
 }
 
 func (v *BuildsView) renderRows(fromIdx int) {

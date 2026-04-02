@@ -1,9 +1,7 @@
 package views
 
 import (
-	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +21,7 @@ type BuildLogView struct {
 	streamer    *api.LogStreamer
 	mu          sync.Mutex
 	stopCh      chan struct{}
-	openURL     string
+	buildWebURL string
 	logURL      string
 	baseContent string
 
@@ -65,7 +63,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildL
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	pathInput := tview.NewInputField()
 	pathInput.SetBackgroundColor(navBg)
@@ -94,6 +92,15 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildL
 
 func (v *BuildLogView) Root() tview.Primitive { return v.root }
 
+func (v *BuildLogView) updateKeys() {
+	v.keys.Clear()
+	if v.isStatic {
+		fmt.Fprint(v.keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	} else {
+		fmt.Fprint(v.keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	}
+}
+
 func (v *BuildLogView) SetBookmarkManager(bm *BookmarkManager) {
 	v.bmManager = bm
 }
@@ -111,8 +118,8 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 			onBack()
 			return nil
 		}
-		if event.Rune() == 'o' && v.openURL != "" {
-			openURL(v.openURL)
+		if event.Rune() == 'o' && v.buildWebURL != "" {
+			openURL(v.buildWebURL)
 			return nil
 		}
 		if event.Rune() == 'l' && v.logURL != "" {
@@ -204,10 +211,11 @@ func (v *BuildLogView) startDownload(destDir string) {
 func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.Stop()
 	v.logURL = build.LogURL
-	v.openURL = build.LogURL
+	v.buildWebURL = build.LogURL
 	v.client = client
 	v.build = build
 	v.isStatic = false
+	v.updateKeys()
 
 	bookmark := ""
 	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
@@ -342,10 +350,11 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	v.client = client
 	v.build = build
 	v.isStatic = true
+	v.updateKeys()
 	if client != nil {
-		v.openURL = client.BuildURL(build.UUID)
+		v.buildWebURL = client.BuildURL(build.UUID)
 	} else {
-		v.openURL = build.LogURL
+		v.buildWebURL = build.LogURL
 	}
 	bookmark := ""
 	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
@@ -541,38 +550,6 @@ func wrapText(s string, width int) []string {
 	return lines
 }
 
-func formatBuildDuration(v any) string {
-	if v == nil {
-		return "—"
-	}
-	var secs float64
-	switch d := v.(type) {
-	case float64:
-		secs = d
-	case int:
-		secs = float64(d)
-	case json.Number:
-		secs, _ = d.Float64()
-	default:
-		s := fmt.Sprintf("%v", v)
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			secs = f
-		} else {
-			return s
-		}
-	}
-	total := int(secs)
-	h := total / 3600
-	m := (total % 3600) / 60
-	s := total % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh %d min %d secs", h, m, s)
-	}
-	if m > 0 {
-		return fmt.Sprintf("%d min %d secs", m, s)
-	}
-	return fmt.Sprintf("%d secs", s)
-}
 
 func resultTag(result string) string {
 	switch result {

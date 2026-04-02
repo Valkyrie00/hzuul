@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"math"
 	"net/url"
-	"os/exec"
 	"path"
-	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -58,7 +55,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -134,27 +131,25 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 		row, _ := table.GetSelection()
 		entry, ok := v.rowMap[row]
 
-		if event.Rune() == 'l' {
-			if !ok || entry.kind != "job" {
-				return event
-			}
-			sr := v.rows[entry.rowIdx]
-			job := sr.item.Jobs[entry.jobIdx]
-			if job.UUID != "" && v.client != nil {
-				v.streamJobLog(sr, job)
-			}
-			return nil
-		}
-
 		if event.Rune() == 'o' {
 			if !ok {
 				return event
 			}
-			idx := entry.rowIdx
 			if entry.kind == "job" {
-				idx = entry.rowIdx
+				sr := v.rows[entry.rowIdx]
+				job := sr.item.Jobs[entry.jobIdx]
+				if job.UUID != "" && v.client != nil {
+					openURL(v.client.BuildURL(job.UUID))
+				}
 			}
-			changeURL := v.rows[idx].item.ChangeURL()
+			return nil
+		}
+
+		if event.Rune() == 'c' {
+			if !ok {
+				return event
+			}
+			changeURL := v.rows[entry.rowIdx].item.ChangeURL()
 			if changeURL != "" {
 				openURL(changeURL)
 			}
@@ -438,116 +433,25 @@ func (v *StatusView) rebuildTable() {
 }
 
 func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
-	v.logView.Stop()
-	v.logView.openURL = job.ReportURL
-
 	project := sr.item.ProjectName()
 	if project == "" {
 		project = sr.queue
 	}
-	v.logView.build = &api.Build{
-		UUID:    job.UUID,
+	uuid, _ := parseJobStreamURL(job)
+	if uuid == "" {
+		uuid = job.UUID
+	}
+	build := &api.Build{
+		UUID:    uuid,
 		JobName: job.Name,
 		Ref: api.BuildRef{
 			Project: project,
+			Branch:  sr.item.ChangeID(),
 			RefURL:  sr.item.ChangeURL(),
 		},
 	}
-	v.logView.client = v.client
-
-	v.logView.header.Clear()
-	fmt.Fprintf(v.logView.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ #%s",
-		job.Name, project, sr.item.ChangeID())
-
-	v.logView.textView.Clear()
-	fmt.Fprintln(v.logView.textView, "[::d]Connecting to log stream...[-]")
-
-	v.logView.stopCh = make(chan struct{})
+	v.logView.StreamBuild(v.client, build)
 	v.pages.SwitchToPage("log")
-
-	go func() {
-		uuid, logfile := parseJobStreamURL(job)
-		if uuid == "" {
-			v.app.QueueUpdateDraw(func() {
-				v.logView.textView.Clear()
-				fmt.Fprintln(v.logView.textView, "[red]No stream UUID available for this job[-]")
-			})
-			return
-		}
-		streamer, err := v.client.StreamLog(uuid, logfile)
-		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.logView.textView.Clear()
-				fmt.Fprintf(v.logView.textView, "[red]Stream error: %v[-]\n\n", err)
-				if job.ReportURL != "" {
-					fmt.Fprintf(v.logView.textView, "[::d]Report URL: %s[-]\n", job.ReportURL)
-				}
-			})
-			return
-		}
-
-		v.logView.mu.Lock()
-		v.logView.streamer = streamer
-		v.logView.mu.Unlock()
-
-		v.app.QueueUpdateDraw(func() {
-			v.logView.textView.Clear()
-		})
-
-		// Buffer incoming messages and flush to the view periodically
-		// to avoid per-line redraws during the initial log dump.
-		var buf strings.Builder
-		var bufMu sync.Mutex
-		done := make(chan struct{})
-
-		go func() {
-			defer close(done)
-			for {
-				msg, err := streamer.ReadMessage()
-				if err != nil {
-					bufMu.Lock()
-					buf.WriteString("\n[::d]--- stream ended ---[-]\n")
-					bufMu.Unlock()
-					return
-				}
-				bufMu.Lock()
-				buf.WriteString(msg)
-				bufMu.Unlock()
-			}
-		}()
-
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-v.logView.stopCh:
-				return
-			case <-done:
-				bufMu.Lock()
-				remaining := buf.String()
-				buf.Reset()
-				bufMu.Unlock()
-				if remaining != "" {
-					v.app.QueueUpdateDraw(func() {
-						fmt.Fprint(v.logView.textView, remaining)
-						v.logView.textView.ScrollToEnd()
-					})
-				}
-				return
-			case <-ticker.C:
-				bufMu.Lock()
-				chunk := buf.String()
-				buf.Reset()
-				bufMu.Unlock()
-				if chunk != "" {
-					v.app.QueueUpdateDraw(func() {
-						fmt.Fprint(v.logView.textView, chunk)
-						v.logView.textView.ScrollToEnd()
-					})
-				}
-			}
-		}
-	}()
 }
 
 func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
@@ -761,17 +665,3 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", m)
 }
 
-func openURL(u string) {
-	var cmd string
-	var args []string
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = "open"
-	case "windows":
-		cmd, args = "cmd", []string{"/c", "start"}
-	default:
-		cmd = "xdg-open"
-	}
-	args = append(args, u)
-	exec.Command(cmd, args...).Start()
-}

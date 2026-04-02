@@ -69,7 +69,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	detailKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(detailKeys, " [#3884f4]b[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open source[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(detailKeys, " [#3884f4]e[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open source[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	detailPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHeader, 1, 0, false).
@@ -89,7 +89,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 
 	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
@@ -148,7 +148,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 			v.page = "table"
 			return nil
 		}
-		if event.Rune() == 'b' && v.currentJob != "" {
+		if event.Rune() == 'e' && v.currentJob != "" {
 			v.showJobBuilds(v.currentJob, buildHeader)
 			return nil
 		}
@@ -169,7 +169,11 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 			return
 		}
 		build := v.buildBuilds[bi]
-		v.logView.ShowStaticLog(v.client, &build)
+		if build.Result == "" && build.UUID != "" {
+			v.logView.StreamBuild(v.client, &build)
+		} else {
+			v.logView.ShowStaticLog(v.client, &build)
+		}
 		v.pages.SwitchToPage("buildlog")
 		v.page = "buildlog"
 	})
@@ -180,7 +184,15 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 			v.page = "detail"
 			return nil
 		}
-		return event
+		bi := func() int {
+			r, _ := buildTable.GetSelection()
+			return r - 1
+		}()
+		if bi < 0 || bi >= len(v.buildBuilds) {
+			return event
+		}
+		build := v.buildBuilds[bi]
+		return handleBuildOpenKeys(event, v.client, &build)
 	})
 
 	logView.SetBackHandler(func() {
@@ -596,24 +608,7 @@ func (v *JobsView) showJobBuilds(jobName string, header *tview.TextView) {
 				return
 			}
 			v.buildBuilds = builds
-			muted := ColorMuted
-			dim := ColorDim
-			for i, b := range builds {
-				row := i + 1
-				change := ""
-				if b.Ref.Change != nil {
-					change = fmt.Sprintf("%v", b.Ref.Change)
-				}
-				rc := resultColor(b.Result)
-				v.buildTable.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.Ref.Project).SetTextColor(rc))
-				v.buildTable.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted))
-				v.buildTable.SetCell(row, 2, tview.NewTableCell(" "+b.Pipeline).SetTextColor(muted))
-				v.buildTable.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(muted))
-				v.buildTable.SetCell(row, 4, resultCell(b.Result))
-				v.buildTable.SetCell(row, 5, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
-				v.buildTable.SetCell(row, 6, tview.NewTableCell(" "+formatTimestamp(b.StartTime)).SetTextColor(dim))
-			}
-			v.buildTable.Select(1, 0)
+			renderBuildRows(v.buildTable, builds, func(b api.Build) string { return b.Ref.Project })
 		})
 	}()
 }

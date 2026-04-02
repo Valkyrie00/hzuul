@@ -1,7 +1,11 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
+	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,6 +114,104 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-1] + "…"
+}
+
+func formatBuildDuration(v any) string {
+	if v == nil {
+		return "—"
+	}
+	var secs float64
+	switch d := v.(type) {
+	case float64:
+		secs = d
+	case int:
+		secs = float64(d)
+	case json.Number:
+		secs, _ = d.Float64()
+	default:
+		s := fmt.Sprintf("%v", v)
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			secs = f
+		} else {
+			return s
+		}
+	}
+	total := int(secs)
+	h := total / 3600
+	m := (total % 3600) / 60
+	s := total % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %d min %d secs", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%d min %d secs", m, s)
+	}
+	return fmt.Sprintf("%d secs", s)
+}
+
+func openURL(u string) {
+	var cmd string
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+	case "windows":
+		cmd, args = "cmd", []string{"/c", "start"}
+	default:
+		cmd = "xdg-open"
+	}
+	args = append(args, u)
+	exec.Command(cmd, args...).Start()
+}
+
+func handleBuildOpenKeys(event *tcell.EventKey, client *api.Client, build *api.Build) *tcell.EventKey {
+	switch event.Rune() {
+	case 'o':
+		if build.UUID != "" && client != nil {
+			openURL(client.BuildURL(build.UUID))
+		}
+		return nil
+	case 'c':
+		if build.Ref.RefURL != "" {
+			openURL(build.Ref.RefURL)
+		}
+		return nil
+	}
+	return event
+}
+
+func renderBuildRows(table *tview.Table, builds []api.Build, primaryField func(api.Build) string) {
+	muted := ColorMuted
+	dim := ColorDim
+	for i, b := range builds {
+		row := i + 1
+		rc := resultColor(b.Result)
+		table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+primaryField(b)).SetTextColor(rc))
+		table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted))
+		table.SetCell(row, 2, tview.NewTableCell(" "+b.Pipeline).SetTextColor(muted))
+		table.SetCell(row, 3, tview.NewTableCell(" "+formatChange(b.Ref)).SetTextColor(muted))
+		table.SetCell(row, 4, resultCell(b.Result))
+		table.SetCell(row, 5, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
+		table.SetCell(row, 6, tview.NewTableCell(" "+formatTimestamp(b.StartTime)).SetTextColor(dim))
+	}
+	table.Select(1, 0)
+}
+
+func formatChange(ref api.BuildRef) string {
+	if ref.Change == nil {
+		return ""
+	}
+	c := fmt.Sprintf("%v", ref.Change)
+	if c == "<nil>" || c == "" {
+		return ""
+	}
+	if ref.Patchset != nil {
+		p := fmt.Sprintf("%v", ref.Patchset)
+		if p != "" && p != "<nil>" {
+			return c + "," + p
+		}
+	}
+	return c
 }
 
 const defaultPageSize = 50
