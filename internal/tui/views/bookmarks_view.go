@@ -115,6 +115,24 @@ func (v *BookmarksView) Load(client *api.Client) {
 	if !v.onDetail {
 		v.renderTable()
 	}
+	v.refreshFromAPI(client)
+}
+
+func (v *BookmarksView) refreshFromAPI(client *api.Client) {
+	if client == nil {
+		return
+	}
+	records := v.manager.Records()
+	for _, rec := range records {
+		uuid := rec.UUID
+		go func() {
+			build, err := client.GetBuild(uuid)
+			if err != nil || build == nil {
+				return
+			}
+			v.manager.Update(uuid, build)
+		}()
+	}
 }
 
 func (v *BookmarksView) SetFilter(_ string) {}

@@ -92,6 +92,32 @@ func (bm *BookmarkManager) Toggle(client *api.Client, build *api.Build) bool {
 	return true
 }
 
+func (bm *BookmarkManager) Update(uuid string, build *api.Build) {
+	bm.mu.Lock()
+	idx := bm.findLocked(uuid)
+	if idx < 0 {
+		bm.mu.Unlock()
+		return
+	}
+	r := &bm.records[idx]
+	r.JobName = build.JobName
+	r.Project = build.Ref.Project
+	r.Branch = build.Ref.Branch
+	r.Pipeline = build.Pipeline
+	r.Result = build.Result
+	r.LogURL = build.LogURL
+	r.StartTime = build.StartTime
+	if build.Ref.RefURL != "" {
+		r.RefURL = build.Ref.RefURL
+	}
+	if c := formatBuildChange(build); c != "" {
+		r.Change = c
+	}
+	bm.mu.Unlock()
+	bm.saveBookmarks()
+	bm.notify()
+}
+
 func (bm *BookmarkManager) Remove(uuid string) {
 	bm.mu.Lock()
 	if idx := bm.findLocked(uuid); idx >= 0 {

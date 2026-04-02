@@ -441,11 +441,21 @@ func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 	v.logView.Stop()
 	v.logView.openURL = job.ReportURL
 
-	v.logView.header.Clear()
 	project := sr.item.ProjectName()
 	if project == "" {
 		project = sr.queue
 	}
+	v.logView.build = &api.Build{
+		UUID:    job.UUID,
+		JobName: job.Name,
+		Ref: api.BuildRef{
+			Project: project,
+			RefURL:  sr.item.ChangeURL(),
+		},
+	}
+	v.logView.client = v.client
+
+	v.logView.header.Clear()
 	fmt.Fprintf(v.logView.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ #%s",
 		job.Name, project, sr.item.ChangeID())
 
