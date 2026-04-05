@@ -65,14 +65,25 @@ func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManage
 		if rec == nil || v.client == nil {
 			return
 		}
-		build := v.recordToBuild(rec)
-		if build.Result == "" && build.UUID != "" {
-			v.logView.StreamBuild(v.client, build)
-		} else {
-			v.logView.ShowStaticLog(v.client, build)
+		fallback := v.recordToBuild(rec)
+		if fallback.Result == "" && fallback.UUID != "" {
+			v.logView.StreamBuild(v.client, fallback)
+			v.pages.SwitchToPage("detail")
+			v.onDetail = true
+			return
 		}
+		v.logView.ShowStaticLog(v.client, fallback)
 		v.pages.SwitchToPage("detail")
 		v.onDetail = true
+		go func() {
+			build, err := v.client.GetBuild(rec.UUID)
+			if err != nil || build == nil {
+				return
+			}
+			v.app.QueueUpdateDraw(func() {
+				v.logView.ShowStaticLog(v.client, build)
+			})
+		}()
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
