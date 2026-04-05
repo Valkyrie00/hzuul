@@ -414,6 +414,10 @@ func (a *App) showHelp() {
    c           Open change/MR/PR (in Build detail)
    q / Esc     Quit / Back
 
+ [#3884f4]Admin (requires token)[-:-:-]
+   x           Dequeue change (Status/Builds)
+   p           Promote change (Status)
+
  [#3884f4]Tables[-:-:-]
    Up/Down     Navigate rows
    /           Search (Esc to clear)
@@ -438,7 +442,7 @@ func (a *App) showHelp() {
 		return event
 	})
 
-	a.pages.AddAndSwitchToPage("help", center(modal, 50, 22), true)
+	a.pages.AddAndSwitchToPage("help", center(modal, 50, 26), true)
 }
 
 func (a *App) showTenantPicker() {

@@ -26,11 +26,12 @@ import (
 // This matches the behavior of Python's requests_kerberos exactly — it reads
 // the TGT acquired via kinit from the system's credential cache.
 type Kerberos struct {
-	jar         *cookiejar.Jar
-	verifySSL   bool
-	caCert      string
-	accessToken string
-	onProgress  func(string)
+	jar             *cookiejar.Jar
+	verifySSL       bool
+	caCert          string
+	accessToken     string
+	hasOIDCSession  bool
+	onProgress      func(string)
 }
 
 // NewKerberos bootstraps a Kerberos session by running curl --negotiate against
@@ -60,6 +61,11 @@ func NewKerberos(targetURL string, verifySSL bool, caCert string, onProgress fun
 		return nil, err
 	}
 
+	progress("Acquiring admin session...")
+	if err := k.acquireOIDCSession(targetURL); err != nil {
+		slog.Debug("kerberos: OIDC session not available", "error", err)
+	}
+
 	progress("Acquiring access token...")
 	if token, err := k.acquireOIDCToken(targetURL); err != nil {
 		slog.Debug("kerberos: could not acquire OIDC token (admin ops may fail)", "error", err)
@@ -72,7 +78,8 @@ func NewKerberos(targetURL string, verifySSL bool, caCert string, onProgress fun
 	return k, nil
 }
 
-func (k *Kerberos) BearerToken() string { return k.accessToken }
+func (k *Kerberos) BearerToken() string    { return k.accessToken }
+func (k *Kerberos) HasOIDCSession() bool   { return k.hasOIDCSession }
 
 func (k *Kerberos) HTTPClient(_ *http.Transport) HTTPDoer {
 	tlsCfg := &tls.Config{
@@ -207,6 +214,75 @@ func (k *Kerberos) negotiate(targetURL string) error {
 	}
 
 	slog.Debug("kerberos auth complete", "target", u.Host, "cookies", len(stored))
+	return nil
+}
+
+// acquireOIDCSession completes the full OIDC redirect flow (like a browser).
+// curl follows all redirects: Zuul → IdP → SPNEGO → IdP callback → Zuul callback.
+// mod_auth_openidc processes the auth code and sets session cookies in the jar.
+func (k *Kerberos) acquireOIDCSession(targetURL string) error {
+	cookieFile, err := os.CreateTemp("", "hzuul-oidc-session-*")
+	if err != nil {
+		return fmt.Errorf("creating temp cookie file: %w", err)
+	}
+	cookiePath := cookieFile.Name()
+	cookieFile.Close()
+	defer os.Remove(cookiePath)
+
+	args := []string{
+		"--negotiate", "-u", ":",
+		"--location-trusted", "-s",
+		"-c", cookiePath,
+		"-o", "/dev/null",
+		"-w", "%{http_code}",
+	}
+	if !k.verifySSL {
+		args = append(args, "-k")
+	}
+	if k.caCert != "" {
+		args = append(args, "--cacert", k.caCert)
+	}
+	args = append(args, targetURL)
+
+	slog.Debug("running OIDC session flow", "url", targetURL)
+	out, err := exec.Command("curl", args...).Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("OIDC session curl failed (exit %d)", exitErr.ExitCode())
+		}
+		return fmt.Errorf("OIDC session curl: %w", err)
+	}
+
+	httpStatus := strings.TrimSpace(string(out))
+	slog.Debug("OIDC session curl completed", "http_status", httpStatus)
+
+	cookieData, err := os.ReadFile(cookiePath)
+	if err != nil {
+		return fmt.Errorf("reading OIDC cookie file: %w", err)
+	}
+
+	cookies, err := parseNetscapeCookies(string(cookieData))
+	if err != nil {
+		return err
+	}
+
+	if len(cookies) == 0 {
+		return fmt.Errorf("no OIDC session cookies obtained (HTTP %s)", httpStatus)
+	}
+
+	u, _ := url.Parse(targetURL)
+	byDomain := make(map[string][]*http.Cookie)
+	for _, c := range cookies {
+		byDomain[c.Domain] = append(byDomain[c.Domain], c)
+	}
+	for domain, dc := range byDomain {
+		du := &url.URL{Scheme: "https", Host: domain}
+		k.jar.SetCookies(du, dc)
+	}
+
+	stored := k.jar.Cookies(u)
+	slog.Debug("OIDC session acquired", "target", u.Host, "cookies", len(stored))
+	k.hasOIDCSession = true
 	return nil
 }
 

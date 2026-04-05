@@ -11,6 +11,7 @@ import (
 type BuildsView struct {
 	root       *tview.Flex
 	table      *tview.Table
+	keys       *tview.TextView
 	countLabel *tview.TextView
 	dlLabel    *tview.TextView
 	logView    *BuildLogView
@@ -21,11 +22,13 @@ type BuildsView struct {
 	builds     []api.Build
 	indexMap    []int
 	filter     string
-	curFilter api.BuildFilter
-	skip     int
-	loading  bool
-	noMore   bool
-	onDetail bool
+	curFilter  api.BuildFilter
+	skip       int
+	loading    bool
+	noMore     bool
+	onDetail   bool
+	dequeuePending  bool
+	dequeueBuildIdx int
 }
 
 func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsView {
@@ -49,7 +52,6 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsVi
 		AddItem(dlLabel, 22, 0, false).
 		AddItem(countLabel, 20, 0, false)
 	keysRow.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -69,6 +71,7 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsVi
 	v := &BuildsView{
 		root:       root,
 		table:      table,
+		keys:       keys,
 		countLabel: countLabel,
 		dlLabel:    dlLabel,
 		logView:    logView,
@@ -100,6 +103,15 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsVi
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if v.dequeuePending {
+			switch event.Rune() {
+			case 'y', 'Y':
+				v.executeDequeue()
+			case 'n', 'N':
+				v.cancelDequeue()
+			}
+			return nil
+		}
 		if v.loading {
 			return event
 		}
@@ -109,6 +121,10 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager) *BuildsVi
 			return event
 		}
 		build := v.builds[idx]
+		if event.Rune() == 'x' {
+			v.confirmDequeue(idx)
+			return nil
+		}
 		return handleBuildOpenKeys(event, v.client, &build)
 	})
 
@@ -144,6 +160,69 @@ func (v *BuildsView) updateDLLabel() {
 func (v *BuildsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *BuildsView) Root() tview.Primitive                   { return v.root }
 
+func (v *BuildsView) updateBuildsKeys() {
+	v.keys.Clear()
+	if v.dequeuePending {
+		b := v.builds[v.dequeueBuildIdx]
+		fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+			truncate(b.JobName, 30), b.Pipeline)
+		return
+	}
+	base := " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]"
+	if v.client != nil && v.client.HasAdminToken() {
+		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
+	}
+	base += "  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]"
+	fmt.Fprint(v.keys, base)
+}
+
+func (v *BuildsView) confirmDequeue(buildIdx int) {
+	if v.client == nil || !v.client.HasAdminToken() {
+		return
+	}
+	b := v.builds[buildIdx]
+	if b.Result != "" {
+		return
+	}
+	v.dequeuePending = true
+	v.dequeueBuildIdx = buildIdx
+	v.updateBuildsKeys()
+}
+
+func (v *BuildsView) cancelDequeue() {
+	v.dequeuePending = false
+	v.updateBuildsKeys()
+}
+
+func (v *BuildsView) executeDequeue() {
+	b := v.builds[v.dequeueBuildIdx]
+	v.keys.Clear()
+	fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+
+	go func() {
+		req := &api.DequeueRequest{
+			Pipeline: b.Pipeline,
+			Project:  b.Ref.Project,
+		}
+		if b.Ref.Change != nil && b.Ref.Patchset != nil {
+			req.Change = fmt.Sprintf("%v,%v", b.Ref.Change, b.Ref.Patchset)
+		} else if b.Ref.Ref != "" {
+			req.Ref = b.Ref.Ref
+		}
+		err := v.client.Dequeue(b.Ref.Project, req)
+		v.app.QueueUpdateDraw(func() {
+			v.dequeuePending = false
+			if err != nil {
+				v.keys.Clear()
+				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				return
+			}
+			v.updateBuildsKeys()
+			v.Load(v.client)
+		})
+	}()
+}
+
 func (v *BuildsView) SetFilter(term string) {
 	v.filter = term
 	if v.client == nil {
@@ -167,6 +246,7 @@ func (v *BuildsView) buildIndex(row int) int {
 
 func (v *BuildsView) Load(client *api.Client) {
 	v.client = client
+	v.updateBuildsKeys()
 	if v.onDetail {
 		return
 	}

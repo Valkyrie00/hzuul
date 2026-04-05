@@ -25,13 +25,14 @@ type BuildLogView struct {
 	logURL      string
 	baseContent string
 
-	client      *api.Client
-	build       *api.Build
-	dlManager   *DownloadManager
-	bmManager   *BookmarkManager
-	onBack      func()
-	isStatic    bool
-	inputActive bool
+	client         *api.Client
+	build          *api.Build
+	dlManager      *DownloadManager
+	bmManager      *BookmarkManager
+	onBack         func()
+	isStatic       bool
+	inputActive    bool
+	dequeuePending bool
 }
 
 func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildLogView {
@@ -94,10 +95,20 @@ func (v *BuildLogView) Root() tview.Primitive { return v.root }
 
 func (v *BuildLogView) updateKeys() {
 	v.keys.Clear()
+	if v.dequeuePending && v.build != nil {
+		fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+			truncate(v.build.JobName, 30), v.build.Pipeline)
+		return
+	}
 	if v.isStatic {
 		fmt.Fprint(v.keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 	} else {
-		fmt.Fprint(v.keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
+		if v.client != nil && v.client.HasAdminToken() {
+			base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
+		}
+		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
+		fmt.Fprint(v.keys, base)
 	}
 }
 
@@ -112,6 +123,16 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 	v.root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if v.inputActive {
 			return event
+		}
+		if v.dequeuePending {
+			switch event.Rune() {
+			case 'y', 'Y':
+				v.executeDequeue()
+			case 'n', 'N':
+				v.dequeuePending = false
+				v.updateKeys()
+			}
+			return nil
 		}
 		if event.Rune() == 'q' || event.Key() == tcell.KeyEsc {
 			v.Stop()
@@ -140,8 +161,45 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 			v.showPathPrompt()
 			return nil
 		}
+		if event.Rune() == 'x' && !v.isStatic && v.client != nil && v.client.HasAdminToken() && v.build != nil {
+			v.dequeuePending = true
+			v.updateKeys()
+			return nil
+		}
 		return event
 	})
+}
+
+func (v *BuildLogView) executeDequeue() {
+	if v.build == nil || v.client == nil {
+		return
+	}
+	v.keys.Clear()
+	fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+
+	build := v.build
+	go func() {
+		req := &api.DequeueRequest{
+			Pipeline: build.Pipeline,
+			Project:  build.Ref.Project,
+		}
+		if build.Ref.Change != nil && build.Ref.Patchset != nil {
+			req.Change = fmt.Sprintf("%v,%v", build.Ref.Change, build.Ref.Patchset)
+		} else if build.Ref.Ref != "" {
+			req.Ref = build.Ref.Ref
+		}
+		err := v.client.Dequeue(build.Ref.Project, req)
+		v.app.QueueUpdateDraw(func() {
+			v.dequeuePending = false
+			if err != nil {
+				v.keys.Clear()
+				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				return
+			}
+			v.keys.Clear()
+			fmt.Fprint(v.keys, " [green]Dequeued successfully[-]")
+		})
+	}()
 }
 
 func (v *BuildLogView) updateBookmarkHeader(added bool) {

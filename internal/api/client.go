@@ -178,6 +178,19 @@ func (c *Client) setBearerToken(req *http.Request) {
 	}
 }
 
+// HasAdminToken reports whether the client has credentials
+// for admin write operations (enqueue, dequeue, promote).
+// This can be via OIDC session cookies or a Bearer token.
+func (c *Client) HasAdminToken() bool {
+	if sp, ok := c.authProvider.(auth.SessionProvider); ok && sp.HasOIDCSession() {
+		return true
+	}
+	if tp, ok := c.authProvider.(auth.TokenProvider); ok {
+		return tp.BearerToken() != ""
+	}
+	return false
+}
+
 // RawGet performs an authenticated GET to an arbitrary absolute URL.
 func (c *Client) RawGet(rawURL string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", rawURL, nil)

@@ -32,6 +32,7 @@ type StatusView struct {
 	table              *tview.Table
 	logView            *BuildLogView
 	pages              *tview.Pages
+	keys               *tview.TextView
 	app                *tview.Application
 	client             *api.Client
 	rowMap             map[int]rowEntry
@@ -40,6 +41,8 @@ type StatusView struct {
 	collapsedPipelines map[string]bool // pipeline name → collapsed
 	status             *api.Status
 	filter             string
+	pendingAction      string // "" | "dequeue" | "promote"
+	pendingRowIdx      int
 }
 
 func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusView {
@@ -75,6 +78,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 		table:              table,
 		logView:            logView,
 		pages:              pages,
+		keys:               keys,
 		app:                app,
 		rowMap:             make(map[int]rowEntry),
 		expanded:           make(map[int]bool),
@@ -128,6 +132,16 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if v.pendingAction != "" {
+			switch event.Rune() {
+			case 'y', 'Y':
+				v.executeAdminAction()
+			case 'n', 'N':
+				v.cancelAdminAction()
+			}
+			return nil
+		}
+
 		row, _ := table.GetSelection()
 		entry, ok := v.rowMap[row]
 
@@ -156,6 +170,16 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 			return nil
 		}
 
+		if event.Rune() == 'x' {
+			v.confirmDequeue()
+			return nil
+		}
+
+		if event.Rune() == 'p' {
+			v.confirmPromote()
+			return nil
+		}
+
 		return event
 	})
 
@@ -179,6 +203,7 @@ func (v *StatusView) SetFilter(term string) {
 
 func (v *StatusView) Load(client *api.Client) {
 	v.client = client
+	v.updateKeys()
 
 	if v.status == nil {
 		v.table.Clear()
@@ -483,6 +508,119 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 				return
 			}
 			v.logView.ShowStaticLog(v.client, build)
+		})
+	}()
+}
+
+func (v *StatusView) updateKeys() {
+	v.keys.Clear()
+	if v.pendingAction != "" {
+		sr := v.rows[v.pendingRowIdx]
+		project := sr.item.ProjectName()
+		if project == "" {
+			project = sr.queue
+		}
+		changeID := sr.item.ChangeID()
+		switch v.pendingAction {
+		case "dequeue":
+			fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]#%s from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+				truncate(project, 30), changeID, sr.pipeline)
+		case "promote":
+			fmt.Fprintf(v.keys, " [yellow::b]Promote[-:-:-] [white]#%s[-] [::d]to top of %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+				changeID, sr.pipeline)
+		}
+		return
+	}
+	base := " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]"
+	if v.client != nil && v.client.HasAdminToken() {
+		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]  [#3884f4]p[-:-:-][::d]:promote[-:-:-]"
+	}
+	base += "  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]"
+	fmt.Fprint(v.keys, base)
+}
+
+func (v *StatusView) confirmDequeue() {
+	if v.client == nil || !v.client.HasAdminToken() {
+		return
+	}
+	row, _ := v.table.GetSelection()
+	entry, ok := v.rowMap[row]
+	if !ok || (entry.kind != "change" && entry.kind != "job") {
+		return
+	}
+	v.pendingAction = "dequeue"
+	v.pendingRowIdx = entry.rowIdx
+	v.updateKeys()
+}
+
+func (v *StatusView) confirmPromote() {
+	if v.client == nil || !v.client.HasAdminToken() {
+		return
+	}
+	row, _ := v.table.GetSelection()
+	entry, ok := v.rowMap[row]
+	if !ok || (entry.kind != "change" && entry.kind != "job") {
+		return
+	}
+	v.pendingAction = "promote"
+	v.pendingRowIdx = entry.rowIdx
+	v.updateKeys()
+}
+
+func (v *StatusView) cancelAdminAction() {
+	v.pendingAction = ""
+	v.updateKeys()
+}
+
+func (v *StatusView) executeAdminAction() {
+	sr := v.rows[v.pendingRowIdx]
+	action := v.pendingAction
+	v.keys.Clear()
+	switch action {
+	case "dequeue":
+		fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+	case "promote":
+		fmt.Fprint(v.keys, " [yellow::b]Promoting...[-:-:-]")
+	}
+
+	project := sr.item.ProjectName()
+	if project == "" {
+		project = sr.queue
+	}
+
+	go func() {
+		var err error
+		switch action {
+		case "dequeue":
+			req := &api.DequeueRequest{
+				Pipeline: sr.pipeline,
+				Project:  project,
+			}
+			if len(sr.item.Refs) > 0 && sr.item.Refs[0].ID != "" {
+				req.Change = sr.item.Refs[0].ID
+			} else {
+				req.Ref = sr.item.RefName()
+			}
+			err = v.client.Dequeue(project, req)
+		case "promote":
+			changeID := sr.item.ChangeID()
+			if len(sr.item.Refs) > 0 && sr.item.Refs[0].ID != "" {
+				changeID = sr.item.Refs[0].ID
+			}
+			err = v.client.Promote(&api.PromoteRequest{
+				Pipeline: sr.pipeline,
+				Changes:  []string{changeID},
+			})
+		}
+		v.app.QueueUpdateDraw(func() {
+			v.pendingAction = ""
+			if err != nil {
+				v.keys.Clear()
+				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				return
+			}
+			v.updateKeys()
+			v.Load(v.client)
 		})
 	}()
 }
