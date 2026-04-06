@@ -11,6 +11,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type statusRow struct {
@@ -45,7 +46,7 @@ type StatusView struct {
 	pendingRowIdx      int
 }
 
-func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusView {
+func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *StatusView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -53,7 +54,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 	table.SetSelectedStyle(tcell.StyleDefault.
 		Background(ColorSelectBg))
 
-	logView := NewBuildLogView(app, dlManager)
+	logView := NewBuildLogView(app, dlManager, aiCfg)
 	keys := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
@@ -192,6 +193,8 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager) *StatusVi
 
 func (v *StatusView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *StatusView) Root() tview.Primitive                   { return v.root }
+
+func (v *StatusView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
 func (v *StatusView) SetFilter(term string) {
 	v.filter = term

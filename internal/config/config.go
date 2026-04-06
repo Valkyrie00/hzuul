@@ -11,6 +11,15 @@ import (
 type Config struct {
 	CurrentContext string              `yaml:"current_context"`
 	Contexts       map[string]*Context `yaml:"contexts"`
+	AI             AIConfig            `yaml:"ai,omitempty"`
+}
+
+type AIConfig struct {
+	Provider        string `yaml:"provider,omitempty"`         // "vertex", "anthropic", or "auto" (default)
+	Model           string `yaml:"model,omitempty"`            // model override
+	AnthropicAPIKey string `yaml:"anthropic_api_key,omitempty"`
+	VertexProjectID string `yaml:"vertex_project_id,omitempty"`
+	VertexRegion    string `yaml:"vertex_region,omitempty"`    // default: us-east5
 }
 
 type Context struct {
@@ -55,7 +64,7 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			cfg := defaultConfig()
-			_ = cfg.Save(path)
+			_ = cfg.SaveWithDefaults(path)
 			return cfg, nil
 		}
 		return nil, fmt.Errorf("reading config %s: %w", path, err)
@@ -90,6 +99,42 @@ func (c *Config) Save(path string) error {
 
 	return os.WriteFile(path, data, 0o644)
 }
+
+func (c *Config) SaveWithDefaults(path string) error {
+	if err := c.Save(path); err != nil {
+		return err
+	}
+	if path == "" {
+		path = defaultPath()
+	}
+	if c.AI.Provider == "" && c.AI.AnthropicAPIKey == "" && c.AI.VertexProjectID == "" {
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		f.WriteString(aiConfigComment)
+	}
+	return nil
+}
+
+const aiConfigComment = `
+# AI-powered build failure analysis (optional)
+# Uncomment ONE of the providers below:
+#
+# Anthropic API (direct):
+# ai:
+#   provider: anthropic
+#   anthropic_api_key: sk-ant-...
+#
+# Google Vertex AI (Claude via GCP):
+# ai:
+#   provider: vertex
+#   vertex_project_id: my-gcp-project
+#   vertex_region: us-east5
+#
+# model: claude-sonnet-4-20250514  # optional model override
+`
 
 func defaultConfig() *Config {
 	return &Config{

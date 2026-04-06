@@ -6,6 +6,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type ProjectsView struct {
@@ -25,7 +26,7 @@ type ProjectsView struct {
 	page         string // "table", "builds", "detail"
 }
 
-func NewProjectsView(app *tview.Application, dlManager *DownloadManager) *ProjectsView {
+func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *ProjectsView {
 	bg := ColorBg
 	navBg := ColorNavBg
 
@@ -64,7 +65,7 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager) *Projec
 		AddItem(buildKeys, 1, 0, false)
 	buildPage.SetBackgroundColor(bg)
 
-	logView := NewBuildLogView(app, dlManager)
+	logView := NewBuildLogView(app, dlManager, aiCfg)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).
@@ -149,6 +150,8 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager) *Projec
 
 func (v *ProjectsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *ProjectsView) Root() tview.Primitive                   { return v.root }
+
+func (v *ProjectsView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
 func (v *ProjectsView) SetFilter(term string) {
 	v.filter = term

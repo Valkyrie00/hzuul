@@ -6,17 +6,22 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type DownloadsView struct {
-	root    *tview.Flex
-	table   *tview.Table
-	app     *tview.Application
-	manager *DownloadManager
+	pages    *tview.Pages
+	root     *tview.Flex
+	table    *tview.Table
+	keys     *tview.TextView
+	app      *tview.Application
+	manager  *DownloadManager
+	analysis *AnalysisPanel
 }
 
-func NewDownloadsView(app *tview.Application, manager *DownloadManager) *DownloadsView {
+func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg config.AIConfig) *DownloadsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -25,19 +30,38 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager) *Downloa
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
-	root := tview.NewFlex().SetDirection(tview.FlexRow).
+	tableLayout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
 		AddItem(keys, 1, 0, false)
+	tableLayout.SetBackgroundColor(ColorBg)
+
+	panel := NewAnalysisPanel(app, aiCfg)
+
+	pages := tview.NewPages().
+		AddPage("table", tableLayout, true, true).
+		AddPage("analysis", panel.Root(), true, false)
+
+	root := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(pages, 0, 1, true)
 	root.SetBackgroundColor(ColorBg)
 
 	v := &DownloadsView{
-		root:    root,
-		table:   table,
-		app:     app,
-		manager: manager,
+		pages:    pages,
+		root:     root,
+		table:    table,
+		keys:     keys,
+		app:      app,
+		manager:  manager,
+		analysis: panel,
 	}
+
+	v.updateKeys()
+
+	panel.SetOnExit(func() {
+		v.pages.SwitchToPage("table")
+		v.app.SetFocus(v.table)
+	})
 
 	manager.SetOnChange(func() {
 		v.renderTable()
@@ -49,6 +73,11 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager) *Downloa
 			return event
 		}
 		switch {
+		case event.Rune() == 'a':
+			if rec.Status != DLDownloading {
+				v.startAnalysis(rec)
+			}
+			return nil
 		case event.Rune() == 'o':
 			if rec.DestDir != "" {
 				openURL(rec.DestDir)
@@ -68,6 +97,13 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager) *Downloa
 		return event
 	})
 
+	root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if v.analysis.IsActive() {
+			return v.analysis.HandleKey(event)
+		}
+		return event
+	})
+
 	return v
 }
 
@@ -75,9 +111,19 @@ func (v *DownloadsView) Root() tview.Primitive { return v.root }
 
 func (v *DownloadsView) Load(_ *api.Client) {
 	v.renderTable()
+	if !v.analysis.IsActive() {
+		v.app.SetFocus(v.table)
+	}
 }
 
 func (v *DownloadsView) SetFilter(_ string) {}
+
+func (v *DownloadsView) IsModal() bool { return v.analysis.IsActive() }
+
+func (v *DownloadsView) updateKeys() {
+	v.keys.Clear()
+	fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+}
 
 func (v *DownloadsView) selectedRecord() *DownloadRecord {
 	row, _ := v.table.GetSelection()
@@ -87,6 +133,48 @@ func (v *DownloadsView) selectedRecord() *DownloadRecord {
 		return nil
 	}
 	return &records[idx]
+}
+
+func (v *DownloadsView) startAnalysis(rec *DownloadRecord) {
+	v.analysis.Start(AnalysisFull, rec.JobName, rec.Project)
+	v.pages.SwitchToPage("analysis")
+	v.app.SetFocus(v.analysis.Content())
+
+	fmt.Fprint(v.analysis.Content(), "[::d]  Reading downloaded logs...[-:-:-]\n")
+
+	go func() {
+		da, err := ai.ReadLogsFromDir(rec.DestDir)
+		v.app.QueueUpdateDraw(func() {
+			if !v.analysis.IsActive() {
+				return
+			}
+			if err != nil {
+				fmt.Fprintf(v.analysis.Content(), "\n[red]  Error reading logs: %v[-]\n", err)
+				return
+			}
+			v.showAnalysisResults(rec, da)
+		})
+	}()
+}
+
+func (v *DownloadsView) showAnalysisResults(rec *DownloadRecord, da *ai.DirAnalysis) {
+	w := v.analysis.Content()
+	w.Clear()
+
+	pbSummaries := ai.PlaybookSummaries(da.JobOutput)
+	classification := ai.ClassifyFailure("FAILURE", da.FailedTasks, pbSummaries)
+	phase := ai.DetermineFailurePhase(pbSummaries)
+
+	v.analysis.WriteClassification(classification, phase)
+	fmt.Fprintf(w, "  [bold]Log files:[-]   %d snippets analyzed\n", len(da.LogFiles))
+
+	input := ai.DirAnalysisInput{
+		JobName: rec.JobName,
+		Project: rec.Project,
+	}
+	systemPrompt := ai.GetSystemPrompt()
+	userPrompt := ai.BuildDirAnalysisPrompt(input, da)
+	v.analysis.StartAI(systemPrompt, userPrompt)
 }
 
 func (v *DownloadsView) renderTable() {

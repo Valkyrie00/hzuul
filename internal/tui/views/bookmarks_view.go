@@ -6,6 +6,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type BookmarksView struct {
@@ -19,7 +20,7 @@ type BookmarksView struct {
 	onDetail bool
 }
 
-func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManager *DownloadManager) *BookmarksView {
+func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManager *DownloadManager, aiCfg config.AIConfig) *BookmarksView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -35,7 +36,7 @@ func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManage
 		AddItem(keys, 1, 0, false)
 	tableWithKeys.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app, dlManager)
+	logView := NewBuildLogView(app, dlManager, aiCfg)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).
@@ -145,6 +146,8 @@ func (v *BookmarksView) refreshFromAPI(client *api.Client) {
 		}()
 	}
 }
+
+func (v *BookmarksView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
 func (v *BookmarksView) SetFilter(_ string) {}
 

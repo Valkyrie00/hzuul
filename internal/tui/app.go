@@ -217,18 +217,19 @@ func (a *App) applyFilter() {
 }
 
 func (a *App) buildViews() []views.View {
+	aiCfg := a.cfg.AI
 	vv := []views.View{
-		views.NewStatusView(a.app, a.dlManager),
-		views.NewProjectsView(a.app, a.dlManager),
-		views.NewJobsView(a.app, a.dlManager),
+		views.NewStatusView(a.app, a.dlManager, aiCfg),
+		views.NewProjectsView(a.app, a.dlManager, aiCfg),
+		views.NewJobsView(a.app, a.dlManager, aiCfg),
 		views.NewLabelsView(a.app),
 		views.NewNodesView(a.app),
 		views.NewAutoholdsView(a.app),
 		views.NewSemaphoresView(a.app),
-		views.NewBuildsView(a.app, a.dlManager),
-		views.NewBuildsetsView(a.app, a.dlManager),
-		views.NewDownloadsView(a.app, a.dlManager),
-		views.NewBookmarksView(a.app, a.bmManager, a.dlManager),
+		views.NewBuildsView(a.app, a.dlManager, aiCfg),
+		views.NewBuildsetsView(a.app, a.dlManager, aiCfg),
+		views.NewDownloadsView(a.app, a.dlManager, aiCfg),
+		views.NewBookmarksView(a.app, a.bmManager, a.dlManager, aiCfg),
 	}
 	for _, v := range vv {
 		if bv, ok := v.(views.BookmarkAwareView); ok {
@@ -414,6 +415,9 @@ func (a *App) showHelp() {
    c           Open change/MR/PR (in Build detail)
    q / Esc     Quit / Back
 
+ [#3884f4]Analysis[-:-:-]
+   a           AI failure analysis (Build detail / Downloads)
+
  [#3884f4]Admin (requires token)[-:-:-]
    x           Dequeue change (Status/Builds)
    p           Promote change (Status)
@@ -442,7 +446,7 @@ func (a *App) showHelp() {
 		return event
 	})
 
-	a.pages.AddAndSwitchToPage("help", center(modal, 50, 26), true)
+	a.pages.AddAndSwitchToPage("help", center(modal, 50, 29), true)
 }
 
 func (a *App) showTenantPicker() {

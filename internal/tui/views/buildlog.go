@@ -8,7 +8,9 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type BuildLogView struct {
@@ -33,9 +35,16 @@ type BuildLogView struct {
 	isStatic       bool
 	inputActive    bool
 	dequeuePending bool
+
+	jobOutput   []api.PlaybookOutput
+	failedTasks []api.FailedTask
+
+	pages       *tview.Pages
+	buildLayout *tview.Flex
+	analysis    *AnalysisPanel
 }
 
-func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildLogView {
+func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildLogView {
 	bg := ColorBg
 	dimColor := ColorSep
 
@@ -73,25 +82,40 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager) *BuildL
 	pathInput.SetLabelColor(ColorAccent)
 	pathInput.SetLabel(" Download to: ")
 
-	root := tview.NewFlex().SetDirection(tview.FlexRow).
+	buildLayout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
 		AddItem(separator, 1, 0, false).
 		AddItem(textView, 0, 1, true).
 		AddItem(keys, 1, 0, false)
+	buildLayout.SetBackgroundColor(bg)
+
+	panel := NewAnalysisPanel(app, aiCfg)
+
+	pages := tview.NewPages().
+		AddPage("build", buildLayout, true, true).
+		AddPage("analysis", panel.Root(), true, false)
+
+	root := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(pages, 0, 1, true)
 	root.SetBackgroundColor(bg)
 
 	return &BuildLogView{
-		root:      root,
-		textView:  textView,
-		header:    header,
-		keys:      keys,
-		pathInput: pathInput,
-		app:       app,
-		dlManager: dlManager,
+		root:        root,
+		textView:    textView,
+		header:      header,
+		keys:        keys,
+		pathInput:   pathInput,
+		app:         app,
+		dlManager:   dlManager,
+		pages:       pages,
+		buildLayout: buildLayout,
+		analysis:    panel,
 	}
 }
 
 func (v *BuildLogView) Root() tview.Primitive { return v.root }
+
+func (v *BuildLogView) IsAnalysisActive() bool { return v.analysis.IsActive() }
 
 func (v *BuildLogView) updateKeys() {
 	v.keys.Clear()
@@ -101,7 +125,12 @@ func (v *BuildLogView) updateKeys() {
 		return
 	}
 	if v.isStatic {
-		fmt.Fprint(v.keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]"
+		if v.build != nil && v.build.Result != "SUCCESS" && v.build.Result != "SKIPPED" {
+			base += "  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]"
+		}
+		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
+		fmt.Fprint(v.keys, base)
 	} else {
 		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
 		if v.client != nil && v.client.HasAdminToken() {
@@ -120,7 +149,24 @@ func (v *BuildLogView) Load(_ *api.Client) {}
 
 func (v *BuildLogView) SetBackHandler(onBack func()) {
 	v.onBack = onBack
+
+	v.analysis.SetOnExit(func() {
+		v.pages.SwitchToPage("build")
+		v.app.SetFocus(v.textView)
+		v.updateKeys()
+		v.updateBookmarkHeader(false)
+		v.textView.Clear()
+		fmt.Fprint(v.textView, v.baseContent)
+		if v.client != nil && v.build != nil && v.build.LogURL != "" {
+			fmt.Fprintf(v.textView, "\n[::d] Loading task summary...[-:-:-]")
+			go v.fetchTaskSummary(v.client, v.build.LogURL)
+		}
+	})
+
 	v.root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if v.analysis.IsActive() {
+			return v.analysis.HandleKey(event)
+		}
 		if v.inputActive {
 			return event
 		}
@@ -164,6 +210,10 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 		if event.Rune() == 'x' && !v.isStatic && v.client != nil && v.client.HasAdminToken() && v.build != nil {
 			v.dequeuePending = true
 			v.updateKeys()
+			return nil
+		}
+		if event.Rune() == 'a' && v.isStatic && v.build != nil && v.build.Result != "SUCCESS" && v.build.Result != "SKIPPED" {
+			v.startAnalysis()
 			return nil
 		}
 		return event
@@ -247,15 +297,15 @@ func (v *BuildLogView) showPathPrompt() {
 		}
 	})
 
-	v.root.RemoveItem(v.keys)
-	v.root.AddItem(v.pathInput, 1, 0, true)
+	v.buildLayout.RemoveItem(v.keys)
+	v.buildLayout.AddItem(v.pathInput, 1, 0, true)
 	v.app.SetFocus(v.pathInput)
 }
 
 func (v *BuildLogView) hidePathPrompt() {
 	v.inputActive = false
-	v.root.RemoveItem(v.pathInput)
-	v.root.AddItem(v.keys, 1, 0, false)
+	v.buildLayout.RemoveItem(v.pathInput)
+	v.buildLayout.AddItem(v.keys, 1, 0, false)
 	v.app.SetFocus(v.textView)
 }
 
@@ -485,6 +535,11 @@ func (v *BuildLogView) fetchTaskSummary(client *api.Client, logURL string) {
 	stats := api.AggregateStats(output)
 	failed := api.ExtractFailedTasks(output, stats)
 
+	v.mu.Lock()
+	v.jobOutput = output
+	v.failedTasks = failed
+	v.mu.Unlock()
+
 	if len(stats) == 0 && len(failed) == 0 {
 		v.app.QueueUpdateDraw(func() {
 			v.textView.Clear()
@@ -620,6 +675,31 @@ func resultTag(result string) string {
 	default:
 		return "[#3884f4]" + result + "[-]"
 	}
+}
+
+func (v *BuildLogView) startAnalysis() {
+	if v.build == nil {
+		return
+	}
+
+	v.analysis.Start(AnalysisBasic, v.build.JobName, v.build.Ref.Project)
+	v.pages.SwitchToPage("analysis")
+	v.app.SetFocus(v.analysis.Content())
+
+	v.mu.Lock()
+	jobOutput := v.jobOutput
+	failedTasks := v.failedTasks
+	v.mu.Unlock()
+
+	pbSummaries := ai.PlaybookSummaries(jobOutput)
+	classification := ai.ClassifyFailure(v.build.Result, failedTasks, pbSummaries)
+	phase := ai.DetermineFailurePhase(pbSummaries)
+
+	v.analysis.WriteClassification(classification, phase)
+
+	systemPrompt := ai.GetSystemPrompt()
+	userPrompt := ai.BuildAnalysisPrompt(v.build, failedTasks, nil)
+	v.analysis.StartAI(systemPrompt, userPrompt)
 }
 
 func (v *BuildLogView) Stop() {

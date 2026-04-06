@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type JobsView struct {
@@ -29,7 +30,7 @@ type JobsView struct {
 	page        string // "table", "detail", "builds", "buildlog"
 }
 
-func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
+func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *JobsView {
 	bg := ColorBg
 	navBg := ColorNavBg
 
@@ -97,7 +98,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 		AddItem(buildKeys, 1, 0, false)
 	buildPage.SetBackgroundColor(bg)
 
-	logView := NewBuildLogView(app, dlManager)
+	logView := NewBuildLogView(app, dlManager, aiCfg)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).
@@ -205,6 +206,8 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager) *JobsView {
 
 func (v *JobsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *JobsView) Root() tview.Primitive                   { return v.root }
+
+func (v *JobsView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
 func (v *JobsView) SetFilter(term string) {
 	v.filter = term

@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
 type BuildsetsView struct {
@@ -31,7 +32,7 @@ type BuildsetsView struct {
 	onLog        bool
 }
 
-func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *BuildsetsView {
+func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildsetsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -83,7 +84,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 		AddItem(keysRow, 1, 0, false)
 	tableWithKeys.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app, dlManager)
+	logView := NewBuildLogView(app, dlManager, aiCfg)
 
 	pages := tview.NewPages().
 		AddPage("table", tableWithKeys, true, true).
@@ -168,6 +169,8 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager) *Build
 
 func (v *BuildsetsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *BuildsetsView) Root() tview.Primitive                   { return v.root }
+
+func (v *BuildsetsView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
 func (v *BuildsetsView) SetFilter(term string) {
 	v.filter = term
