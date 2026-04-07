@@ -31,6 +31,15 @@ func HasAnalyzer(cfg config.AIConfig) bool {
 	return resolveProvider(cfg) != nil
 }
 
+// ProviderLabel returns a short label for the active provider, or empty if none.
+func ProviderLabel(cfg config.AIConfig) string {
+	p := resolveProvider(cfg)
+	if p == nil {
+		return ""
+	}
+	return p.Name()
+}
+
 func resolveProvider(cfg config.AIConfig) Provider {
 	provider := strings.ToLower(cfg.Provider)
 	if provider == "" {

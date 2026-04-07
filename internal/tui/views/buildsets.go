@@ -236,7 +236,7 @@ func (v *BuildsetsView) updateCount() {
 	if !v.noMore {
 		suffix = "+"
 	}
-	fmt.Fprintf(v.countLabel, "[::d]%d%s items [-]", len(v.buildsets), suffix)
+	fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.buildsets), suffix)
 }
 
 func (v *BuildsetsView) loadMore() {

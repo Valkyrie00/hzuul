@@ -7,6 +7,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
 	"github.com/Valkyrie00/hzuul/internal/tui/views"
@@ -139,13 +140,21 @@ func (a *App) Run() error {
 	return a.app.Run()
 }
 
+func (a *App) aiLabel() string {
+	label := ai.ProviderLabel(a.cfg.AI)
+	if label != "" {
+		return fmt.Sprintf("[::d]│[-:-:-] [::d]ai:[-:-:-] [green]%s[-:-:-]", label)
+	}
+	return "[::d]│[-:-:-] [::d]ai:[-:-:-] [red]not configured[-:-:-]"
+}
+
 func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 	tv := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	tv.SetBackgroundColor(views.ColorHeaderBg)
-	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
-		strings.ToUpper(a.version), ctx.URL, ctx.Tenant, a.cfg.CurrentContext)
+	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
+		strings.ToUpper(a.version), ctx.URL, ctx.Tenant, a.cfg.CurrentContext, a.aiLabel())
 	return tv
 }
 
@@ -281,7 +290,7 @@ func (a *App) autoRefresh() {
 
 func (a *App) updateFooterTime() {
 	a.footerTime.Clear()
-	fmt.Fprintf(a.footerTime, "[::d]last update: %s [-]", time.Now().Format("15:04:05"))
+	fmt.Fprintf(a.footerTime, "[::d]last update: %s [-:-:-]", time.Now().Format("15:04:05"))
 }
 
 func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
@@ -480,11 +489,11 @@ func (a *App) showTenantPicker() {
 					list.SetCurrentItem(i)
 				}
 				list.AddItem(prefix+name, "", 0, func() {
-					a.client.SetTenant(name)
-					a.header.Clear()
-					ctx, _ := a.cfg.Active()
-					fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-] %s [::d]│[-] [::d]tenant:[-] [white::b]%s[-:-:-] [::d]│[-] [::d]ctx:[-] [green]%s[-]",
-						strings.ToUpper(a.version), ctx.URL, name, a.cfg.CurrentContext)
+				a.client.SetTenant(name)
+				a.header.Clear()
+				ctx, _ := a.cfg.Active()
+				fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
+						strings.ToUpper(a.version), ctx.URL, name, a.cfg.CurrentContext, a.aiLabel())
 					a.dismissModal("tenants")
 					idx := a.nav.Active()
 					a.views[idx].Load(a.client)
