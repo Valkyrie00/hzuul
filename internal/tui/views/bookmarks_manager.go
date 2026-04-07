@@ -22,6 +22,7 @@ type BookmarkRecord struct {
 	RefURL    string `json:"ref_url,omitempty"`
 	LogURL    string `json:"log_url,omitempty"`
 	Tenant    string `json:"tenant"`
+	Host      string `json:"host,omitempty"`
 	StartTime string `json:"start_time"`
 	SavedAt   string `json:"saved_at"`
 }
@@ -50,6 +51,20 @@ func (bm *BookmarkManager) Records() []BookmarkRecord {
 	return out
 }
 
+func (bm *BookmarkManager) RecordsByContext(host, tenant string) []BookmarkRecord {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+	var out []BookmarkRecord
+	for _, r := range bm.records {
+		hostMatch := host == "" || r.Host == host || r.Host == ""
+		tenantMatch := tenant == "" || r.Tenant == tenant || r.Tenant == ""
+		if hostMatch && tenantMatch {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func (bm *BookmarkManager) IsBookmarked(uuid string) bool {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -67,8 +82,10 @@ func (bm *BookmarkManager) Toggle(client *api.Client, build *api.Build) bool {
 	}
 
 	tenant := ""
+	host := ""
 	if client != nil {
 		tenant = client.Tenant()
+		host = client.Host()
 	}
 
 	rec := BookmarkRecord{
@@ -82,6 +99,7 @@ func (bm *BookmarkManager) Toggle(client *api.Client, build *api.Build) bool {
 		RefURL:    build.Ref.RefURL,
 		LogURL:    build.LogURL,
 		Tenant:    tenant,
+		Host:      host,
 		StartTime: build.StartTime,
 		SavedAt:   time.Now().Format(time.RFC3339),
 	}

@@ -130,11 +130,18 @@ func (v *BookmarksView) Load(client *api.Client) {
 	v.refreshFromAPI(client)
 }
 
+func (v *BookmarksView) currentHost() string {
+	if v.client != nil {
+		return v.client.Host()
+	}
+	return ""
+}
+
 func (v *BookmarksView) refreshFromAPI(client *api.Client) {
 	if client == nil {
 		return
 	}
-	records := v.manager.Records()
+	records := v.filteredRecords()
 	for _, rec := range records {
 		uuid := rec.UUID
 		go func() {
@@ -151,10 +158,22 @@ func (v *BookmarksView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
 func (v *BookmarksView) SetFilter(_ string) {}
 
+func (v *BookmarksView) filteredRecords() []BookmarkRecord {
+	host := v.currentHost()
+	tenant := ""
+	if v.client != nil {
+		tenant = v.client.Tenant()
+	}
+	if host != "" || tenant != "" {
+		return v.manager.RecordsByContext(host, tenant)
+	}
+	return v.manager.Records()
+}
+
 func (v *BookmarksView) selectedRecord() *BookmarkRecord {
 	row, _ := v.table.GetSelection()
 	idx := row - 1
-	records := v.manager.Records()
+	records := v.filteredRecords()
 	if idx < 0 || idx >= len(records) {
 		return nil
 	}
@@ -179,9 +198,9 @@ func (v *BookmarksView) recordToBuild(rec *BookmarkRecord) *api.Build {
 
 func (v *BookmarksView) renderTable() {
 	v.table.Clear()
-	setTableHeader(v.table, "Job", "Project", "Branch", "Result", "Pipeline", "Change", "Saved")
+	setTableHeader(v.table, "Job", "Project", "Branch", "Instance", "Tenant", "Result", "Pipeline", "Change", "Saved")
 
-	records := v.manager.Records()
+	records := v.filteredRecords()
 	if len(records) == 0 {
 		v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No bookmarks yet. Press b in a build detail to save one.[-:-:-]").SetSelectable(false))
 		return
@@ -192,12 +211,24 @@ func (v *BookmarksView) renderTable() {
 	for i, r := range records {
 		row := i + 1
 		rc := resultColor(r.Result)
+
+		host := r.Host
+		if host == "" {
+			host = "—"
+		}
+		tenant := r.Tenant
+		if tenant == "" {
+			tenant = "—"
+		}
+
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(r.Result)+" "+r.JobName).SetTextColor(rc).SetExpansion(1))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+r.Project).SetTextColor(muted).SetMaxWidth(40))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+r.Branch).SetTextColor(muted).SetMaxWidth(15))
-		v.table.SetCell(row, 3, resultCell(r.Result))
-		v.table.SetCell(row, 4, tview.NewTableCell(" "+truncate(r.Pipeline, 20)).SetTextColor(muted))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+r.Change).SetTextColor(ColorAccent))
-		v.table.SetCell(row, 6, tview.NewTableCell(" "+formatDLDate(r.SavedAt)).SetTextColor(dim))
+		v.table.SetCell(row, 3, tview.NewTableCell(" "+host).SetTextColor(dim).SetMaxWidth(30))
+		v.table.SetCell(row, 4, tview.NewTableCell(" "+tenant).SetTextColor(muted).SetMaxWidth(25))
+		v.table.SetCell(row, 5, resultCell(r.Result))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+truncate(r.Pipeline, 20)).SetTextColor(muted))
+		v.table.SetCell(row, 7, tview.NewTableCell(" "+r.Change).SetTextColor(ColorAccent))
+		v.table.SetCell(row, 8, tview.NewTableCell(" "+formatDLDate(r.SavedAt)).SetTextColor(dim))
 	}
 }

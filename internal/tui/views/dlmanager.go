@@ -27,6 +27,7 @@ type DownloadRecord struct {
 	JobName    string   `json:"job_name"`
 	Project    string   `json:"project"`
 	Tenant     string   `json:"tenant"`
+	Host       string   `json:"host,omitempty"`
 	Status     DLStatus `json:"status"`
 	TotalFiles int      `json:"total_files"`
 	DoneFiles  int      `json:"done_files"`
@@ -98,6 +99,7 @@ func (dm *DownloadManager) Start(
 		JobName:   build.JobName,
 		Project:   build.Ref.Project,
 		Tenant:    client.Tenant(),
+		Host:      client.Host(),
 		Status:    DLDownloading,
 		DestDir:   destDir,
 		StartedAt: time.Now().Format(time.RFC3339),
@@ -206,7 +208,7 @@ func (dm *DownloadManager) notify() {
 }
 
 func historyPath() string {
-	return filepath.Join(config.DataDir(), "history.json")
+	return filepath.Join(config.DataDir(), "downloads.json")
 }
 
 func (dm *DownloadManager) loadHistory() {
@@ -248,8 +250,8 @@ func (dm *DownloadManager) saveHistory() {
 	_ = os.WriteFile(historyPath(), data, 0o644)
 }
 
-func DefaultDownloadDir(tenant, uuid string) string {
-	return filepath.Join(config.DataDir(), "logs", tenant, uuid)
+func DefaultDownloadDir(host, tenant, uuid string) string {
+	return filepath.Join(config.DataDir(), "logs", host, tenant, uuid)
 }
 
 func FormatBytes(b int64) string {

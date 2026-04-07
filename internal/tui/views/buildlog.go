@@ -300,15 +300,17 @@ func (v *BuildLogView) updateBookmarkHeader(added bool) {
 }
 
 func (v *BuildLogView) defaultDownloadDir() string {
+	host := ""
 	tenant := ""
 	if v.client != nil {
+		host = v.client.Host()
 		tenant = v.client.Tenant()
 	}
 	uuid := ""
 	if v.build != nil {
 		uuid = v.build.UUID
 	}
-	return DefaultDownloadDir(tenant, uuid)
+	return DefaultDownloadDir(host, tenant, uuid)
 }
 
 func (v *BuildLogView) showPathPrompt() {

@@ -134,7 +134,7 @@ Press `d` in any build detail view to download the full build logs to disk.
 - A path prompt appears pre-filled with `~/.hzuul/logs/<tenant>/<uuid>/`
 - Downloads run in the background — navigate away while they complete
 - The **Downloads** tab (`0`) shows all active and past downloads with status, progress, and size
-- History is persisted in `~/.hzuul/history.json` across sessions
+- History is persisted in `~/.hzuul/downloads.json` across sessions
 - 10 concurrent workers for fast throughput
 
 | Key (Downloads view) | Action              |

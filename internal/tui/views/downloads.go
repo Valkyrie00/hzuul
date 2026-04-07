@@ -179,7 +179,7 @@ func (v *DownloadsView) showAnalysisResults(rec *DownloadRecord, da *ai.DirAnaly
 
 func (v *DownloadsView) renderTable() {
 	v.table.Clear()
-	setTableHeader(v.table, "Job", "Project", "Status", "Progress", "Size", "Date", "Path")
+	setTableHeader(v.table, "Job", "Project", "Instance", "Status", "Progress", "Size", "Date")
 
 	records := v.manager.Records()
 	if len(records) == 0 {
@@ -200,13 +200,18 @@ func (v *DownloadsView) renderTable() {
 		}
 		dateText := formatDLDate(r.StartedAt)
 
+		host := r.Host
+		if host == "" {
+			host = "—"
+		}
+
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+r.JobName).SetTextColor(tcell.ColorWhite).SetExpansion(1))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+r.Project).SetTextColor(muted).SetMaxWidth(35))
-		v.table.SetCell(row, 2, statusCell)
-		v.table.SetCell(row, 3, tview.NewTableCell(" "+progressText).SetTextColor(muted))
-		v.table.SetCell(row, 4, tview.NewTableCell(" "+sizeText).SetTextColor(muted))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+dateText).SetTextColor(dim))
-		v.table.SetCell(row, 6, tview.NewTableCell(" "+truncateRight(r.DestDir, 40)).SetTextColor(dim))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+host).SetTextColor(dim).SetMaxWidth(30))
+		v.table.SetCell(row, 3, statusCell)
+		v.table.SetCell(row, 4, tview.NewTableCell(" "+progressText).SetTextColor(muted))
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+sizeText).SetTextColor(muted))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+dateText).SetTextColor(dim))
 	}
 }
 
