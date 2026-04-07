@@ -58,7 +58,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true)
 	detailKeys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(detailKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(detailKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	detailFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHead, 0, 0, false).

@@ -59,7 +59,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -535,7 +535,7 @@ func (v *StatusView) updateKeys() {
 		}
 		return
 	}
-	base := " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]"
+	base := " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]"
 	if v.client != nil && v.client.HasAdminToken() {
 		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]  [#3884f4]p[-:-:-][::d]:promote[-:-:-]"
 	}

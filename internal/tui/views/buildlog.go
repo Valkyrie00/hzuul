@@ -76,7 +76,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	pathInput := tview.NewInputField()
 	pathInput.SetBackgroundColor(navBg)
@@ -144,14 +144,14 @@ func (v *BuildLogView) updateKeys() {
 		return
 	}
 	if v.isStatic {
-		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]"
+		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]"
 		if v.build != nil && v.build.Result != "SUCCESS" && v.build.Result != "SKIPPED" {
 			base += "  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]"
 		}
 		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
 		fmt.Fprint(v.keys, base)
 	} else {
-		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:save[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
+		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
 		if v.client != nil && v.client.HasAdminToken() {
 			base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
 		}

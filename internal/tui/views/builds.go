@@ -169,7 +169,7 @@ func (v *BuildsView) updateBuildsKeys() {
 			truncate(b.JobName, 30), b.Pipeline)
 		return
 	}
-	base := " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:change[-:-:-]"
+	base := " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]"
 	if v.client != nil && v.client.HasAdminToken() {
 		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
 	}
