@@ -151,7 +151,8 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 func (v *ProjectsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *ProjectsView) Root() tview.Primitive                   { return v.root }
 
-func (v *ProjectsView) IsModal() bool { return v.logView.IsAnalysisActive() }
+func (v *ProjectsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *ProjectsView) IsLiveFilterable() bool { return true }
 
 func (v *ProjectsView) SetFilter(term string) {
 	v.filter = term

@@ -207,7 +207,8 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 func (v *JobsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *JobsView) Root() tview.Primitive                   { return v.root }
 
-func (v *JobsView) IsModal() bool { return v.logView.IsAnalysisActive() }
+func (v *JobsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *JobsView) IsLiveFilterable() bool { return true }
 
 func (v *JobsView) SetFilter(term string) {
 	v.filter = term

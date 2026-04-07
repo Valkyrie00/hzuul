@@ -194,7 +194,8 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 func (v *StatusView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *StatusView) Root() tview.Primitive                   { return v.root }
 
-func (v *StatusView) IsModal() bool { return v.logView.IsAnalysisActive() }
+func (v *StatusView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *StatusView) IsLiveFilterable() bool { return true }
 
 func (v *StatusView) SetFilter(term string) {
 	v.filter = term

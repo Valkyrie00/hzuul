@@ -18,6 +18,12 @@ type ModalView interface {
 	IsModal() bool
 }
 
+// LiveFilterable is implemented by views that hold their data in memory
+// and can re-filter instantly on each keystroke without API calls.
+type LiveFilterable interface {
+	IsLiveFilterable() bool
+}
+
 // BookmarkAwareView can be implemented by views that contain a BuildLogView
 // and need the BookmarkManager injected after construction.
 type BookmarkAwareView interface {

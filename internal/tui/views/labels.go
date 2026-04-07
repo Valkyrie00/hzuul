@@ -37,7 +37,8 @@ func NewLabelsView(app *tview.Application) *LabelsView {
 	return &LabelsView{root: root, table: table, app: app}
 }
 
-func (v *LabelsView) Root() tview.Primitive { return v.root }
+func (v *LabelsView) Root() tview.Primitive       { return v.root }
+func (v *LabelsView) IsLiveFilterable() bool { return true }
 
 func (v *LabelsView) SetFilter(term string) {
 	v.filter = term

@@ -36,7 +36,8 @@ func NewSemaphoresView(app *tview.Application) *SemaphoresView {
 	return &SemaphoresView{root: root, table: table, app: app}
 }
 
-func (v *SemaphoresView) Root() tview.Primitive { return v.root }
+func (v *SemaphoresView) Root() tview.Primitive       { return v.root }
+func (v *SemaphoresView) IsLiveFilterable() bool { return true }
 
 func (v *SemaphoresView) SetFilter(term string) {
 	v.filter = term

@@ -80,7 +80,8 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 	return v
 }
 
-func (v *AutoholdsView) Root() tview.Primitive { return v.root }
+func (v *AutoholdsView) Root() tview.Primitive       { return v.root }
+func (v *AutoholdsView) IsLiveFilterable() bool { return true }
 
 func (v *AutoholdsView) SetFilter(term string) {
 	v.filter = term

@@ -225,6 +225,14 @@ func (a *App) applyFilter() {
 	a.views[idx].SetFilter(a.filterText)
 }
 
+func (a *App) isLiveFilterable() bool {
+	idx := a.nav.Active()
+	if lf, ok := a.views[idx].(views.LiveFilterable); ok {
+		return lf.IsLiveFilterable()
+	}
+	return false
+}
+
 func (a *App) buildViews() []views.View {
 	aiCfg := a.cfg.AI
 	vv := []views.View{
@@ -358,18 +366,27 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 				a.filterText = string(append(runes[:a.filterPos-1], runes[a.filterPos:]...))
 				a.filterPos--
 				a.updateFooterKeysText()
+				if a.isLiveFilterable() {
+					a.applyFilter()
+				}
 			}
 			return nil
 		case tcell.KeyDelete:
 			if a.filterPos < len(runes) {
 				a.filterText = string(append(runes[:a.filterPos], runes[a.filterPos+1:]...))
 				a.updateFooterKeysText()
+				if a.isLiveFilterable() {
+					a.applyFilter()
+				}
 			}
 			return nil
 		case tcell.KeyRune:
 			a.filterText = string(append(runes[:a.filterPos], append([]rune{event.Rune()}, runes[a.filterPos:]...)...))
 			a.filterPos++
 			a.updateFooterKeysText()
+			if a.isLiveFilterable() {
+				a.applyFilter()
+			}
 			return nil
 		}
 		return nil

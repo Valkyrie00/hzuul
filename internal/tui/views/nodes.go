@@ -35,7 +35,8 @@ func NewNodesView(app *tview.Application) *NodesView {
 	return &NodesView{root: root, table: table, app: app}
 }
 
-func (v *NodesView) Root() tview.Primitive { return v.root }
+func (v *NodesView) Root() tview.Primitive       { return v.root }
+func (v *NodesView) IsLiveFilterable() bool { return true }
 
 func (v *NodesView) SetFilter(term string) {
 	v.filter = term
