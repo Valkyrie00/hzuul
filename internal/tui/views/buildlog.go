@@ -17,15 +17,18 @@ type BuildLogView struct {
 	root        *tview.Flex
 	textView    *tview.TextView
 	header      *tview.TextView
+	separator   *tview.TextView
 	keys        *tview.TextView
 	pathInput   *tview.InputField
 	app         *tview.Application
 	streamer    *api.LogStreamer
 	mu          sync.Mutex
 	stopCh      chan struct{}
-	buildWebURL string
-	logURL      string
-	baseContent string
+	buildWebURL   string
+	logURL        string
+	contentFlex  *tview.Flex
+	infoView     *tview.TextView
+	errorsHeader *tview.TextView
 
 	client         *api.Client
 	build          *api.Build
@@ -82,10 +85,22 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	pathInput.SetLabelColor(ColorAccent)
 	pathInput.SetLabel(" Download to: ")
 
+	infoView := tview.NewTextView().SetDynamicColors(true)
+	infoView.SetBackgroundColor(bg)
+	infoView.SetBorderPadding(0, 0, 2, 2)
+
+	errorsHeader := tview.NewTextView().SetDynamicColors(true)
+	errorsHeader.SetBackgroundColor(bg)
+	errorsHeader.SetBorderPadding(0, 0, 2, 2)
+
+	contentFlex := tview.NewFlex().SetDirection(tview.FlexRow)
+	contentFlex.SetBackgroundColor(bg)
+	contentFlex.AddItem(textView, 0, 1, true)
+
 	buildLayout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
 		AddItem(separator, 1, 0, false).
-		AddItem(textView, 0, 1, true).
+		AddItem(contentFlex, 0, 1, true).
 		AddItem(keys, 1, 0, false)
 	buildLayout.SetBackgroundColor(bg)
 
@@ -100,9 +115,13 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	root.SetBackgroundColor(bg)
 
 	return &BuildLogView{
-		root:        root,
-		textView:    textView,
-		header:      header,
+		root:         root,
+		textView:     textView,
+		contentFlex:  contentFlex,
+		infoView:     infoView,
+		errorsHeader: errorsHeader,
+		header:       header,
+		separator:    separator,
 		keys:        keys,
 		pathInput:   pathInput,
 		app:         app,
@@ -155,11 +174,17 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 		v.app.SetFocus(v.textView)
 		v.updateKeys()
 		v.updateBookmarkHeader(false)
-		v.textView.Clear()
-		fmt.Fprint(v.textView, v.baseContent)
-		if v.client != nil && v.build != nil && v.build.LogURL != "" {
-			fmt.Fprintf(v.textView, "\n[::d] Loading task summary...[-:-:-]")
-			go v.fetchTaskSummary(v.client, v.build.LogURL)
+
+		v.mu.Lock()
+		jobOutput := v.jobOutput
+		failedTasks := v.failedTasks
+		v.mu.Unlock()
+
+		if jobOutput != nil {
+			stats := api.AggregateStats(jobOutput)
+			v.renderBuildDetail(stats, failedTasks, "")
+		} else {
+			v.renderBuildDetail(nil, nil, "")
 		}
 	})
 
@@ -256,6 +281,13 @@ func (v *BuildLogView) updateBookmarkHeader(added bool) {
 	if v.build == nil {
 		return
 	}
+	if v.isStatic {
+		v.infoView.Clear()
+		for _, line := range v.buildInfoLines() {
+			fmt.Fprintln(v.infoView, line)
+		}
+		return
+	}
 	bookmark := ""
 	if added {
 		bookmark = " [yellow]*BOOKMARKED*[-]"
@@ -263,7 +295,7 @@ func (v *BuildLogView) updateBookmarkHeader(added bool) {
 		bookmark = " [yellow]*BOOKMARKED*[-]"
 	}
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ %s%s",
+	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
 		v.build.JobName, v.build.Ref.Project, v.build.Ref.Branch, bookmark)
 }
 
@@ -318,12 +350,31 @@ func (v *BuildLogView) startDownload(destDir string) {
 
 func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.Stop()
+
+	v.mu.Lock()
+	v.jobOutput = nil
+	v.failedTasks = nil
+	v.mu.Unlock()
+
 	v.logURL = build.LogURL
 	v.buildWebURL = build.LogURL
 	v.client = client
 	v.build = build
 	v.isStatic = false
 	v.updateKeys()
+
+	v.contentFlex.Clear()
+	v.contentFlex.AddItem(v.textView, 0, 1, true)
+
+	// Restore header + separator for Log streaming view
+	v.buildLayout.RemoveItem(v.header)
+	v.buildLayout.RemoveItem(v.separator)
+	v.buildLayout.RemoveItem(v.contentFlex)
+	v.buildLayout.RemoveItem(v.keys)
+	v.buildLayout.AddItem(v.header, 1, 0, false)
+	v.buildLayout.AddItem(v.separator, 1, 0, false)
+	v.buildLayout.AddItem(v.contentFlex, 0, 1, true)
+	v.buildLayout.AddItem(v.keys, 1, 0, false)
 
 	bookmark := ""
 	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
@@ -454,6 +505,20 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 
 func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	v.Stop()
+
+	v.mu.Lock()
+	v.jobOutput = nil
+	v.failedTasks = nil
+	v.mu.Unlock()
+
+	v.pages.SwitchToPage("build")
+	v.textView.SetChangedFunc(nil)
+	v.contentFlex.Clear()
+	v.infoView.Clear()
+	v.errorsHeader.Clear()
+	v.textView.Clear()
+	v.textView.SetChangedFunc(func() { v.app.Draw() })
+
 	v.logURL = build.LogURL
 	v.client = client
 	v.build = build
@@ -464,218 +529,321 @@ func (v *BuildLogView) ShowStaticLog(client *api.Client, build *api.Build) {
 	} else {
 		v.buildWebURL = build.LogURL
 	}
-	bookmark := ""
-	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
-		bookmark = " [yellow]*BOOKMARKED*[-]"
-	}
-	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ %s%s",
-		build.JobName, build.Ref.Project, build.Ref.Branch, bookmark)
+	v.buildLayout.RemoveItem(v.header)
+	v.buildLayout.RemoveItem(v.separator)
 
-	thinLine := "────────────────────────────────────────────────────────────────────────────────"
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "[bold]Job:[-]       %s\n", build.JobName)
-	fmt.Fprintf(&b, "[bold]UUID:[-]      %s\n", build.UUID)
-	fmt.Fprintf(&b, "[bold]Project:[-]   %s\n", build.Ref.Project)
-	fmt.Fprintf(&b, "[bold]Branch:[-]    %s\n", build.Ref.Branch)
-	if build.Ref.Change != nil && build.Ref.Patchset != nil {
-		fmt.Fprintf(&b, "[bold]Change:[-]    %v,%v\n", build.Ref.Change, build.Ref.Patchset)
-	} else if build.Ref.Ref != "" {
-		fmt.Fprintf(&b, "[bold]Ref:[-]       %s\n", build.Ref.Ref)
-	}
-	if build.Ref.RefURL != "" {
-		fmt.Fprintf(&b, "[bold]Change URL:[-] %s\n", build.Ref.RefURL)
-	}
-	fmt.Fprintf(&b, "[bold]Result:[-]    %s\n", resultTag(build.Result))
-	fmt.Fprintf(&b, "[bold]Duration:[-]  %s\n", formatBuildDuration(build.Duration))
-	fmt.Fprintf(&b, "[bold]Start:[-]     %s\n", build.StartTime)
-	fmt.Fprintf(&b, "[bold]End:[-]       %s\n", build.EndTime)
-	fmt.Fprintf(&b, "[bold]Voting:[-]    %v\n", build.Voting)
-	fmt.Fprintf(&b, "[bold]Nodeset:[-]   %s\n", build.Nodeset)
-	if build.LogURL != "" {
-		fmt.Fprintf(&b, "[bold]Log URL:[-]   %s\n", build.LogURL)
-	}
-	if client != nil {
-		fmt.Fprintf(&b, "[bold]Web URL:[-]   %s\n", client.BuildURL(build.UUID))
-	}
-	if build.ErrorDetail != "" {
-		fmt.Fprintf(&b, "\n[red][bold]Error:[-] %s[-]\n", build.ErrorDetail)
-	}
-	if len(build.Artifacts) > 0 {
-		fmt.Fprintf(&b, "\n[::d]%s[-:-:-]\n", thinLine)
-		fmt.Fprintf(&b, "[bold]  Artifacts[-:-:-]\n")
-		fmt.Fprintf(&b, "[::d]%s[-:-:-]\n", thinLine)
-		for _, a := range build.Artifacts {
-			fmt.Fprintf(&b, "  • %s: %s\n", a.Name, a.URL)
-		}
-	}
-
-	v.baseContent = b.String()
-	v.textView.Clear()
-	fmt.Fprint(v.textView, v.baseContent)
-
+	loadMsg := ""
 	if client != nil && build.LogURL != "" {
-		fmt.Fprintf(v.textView, "\n[::d] Loading task summary...[-:-:-]")
+		loadMsg = "Loading task summary..."
 		go v.fetchTaskSummary(client, build.LogURL)
 	}
+	v.renderBuildDetail(nil, nil, loadMsg)
 }
 
 func (v *BuildLogView) fetchTaskSummary(client *api.Client, logURL string) {
 	output, err := client.GetJobOutput(logURL)
-	if err != nil {
-		v.app.QueueUpdateDraw(func() {
-			v.textView.Clear()
-			fmt.Fprint(v.textView, v.baseContent)
-			fmt.Fprintf(v.textView, "\n[::d]  ⚠ Could not load task summary: %v[-:-:-]\n", err)
-		})
-		return
-	}
-
-	stats := api.AggregateStats(output)
-	failed := api.ExtractFailedTasks(output, stats)
-
-	v.mu.Lock()
-	v.jobOutput = output
-	v.failedTasks = failed
-	v.mu.Unlock()
-
-	if len(stats) == 0 && len(failed) == 0 {
-		v.app.QueueUpdateDraw(func() {
-			v.textView.Clear()
-			fmt.Fprint(v.textView, v.baseContent)
-			fmt.Fprintf(v.textView, "\n[::d]  ✓ No task failures detected[-:-:-]\n")
-		})
-		return
-	}
 
 	v.app.QueueUpdateDraw(func() {
-		v.textView.Clear()
-		fmt.Fprint(v.textView, v.baseContent)
-		thickLine := "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-		if len(stats) > 0 {
-			fmt.Fprintf(v.textView, "\n[#3884f4]%s[-]\n", thickLine)
-			fmt.Fprintf(v.textView, "[bold][#3884f4]  Task Summary[-]\n")
-			fmt.Fprintf(v.textView, "[#3884f4]%s[-]\n\n", thickLine)
-
-			nameW := 4
-			for host := range stats {
-				if len(host) > nameW {
-					nameW = len(host)
-				}
-			}
-			if nameW > 40 {
-				nameW = 40
-			}
-
-			fmt.Fprintf(v.textView, "  [::b]  %-*s  %5s  %5s  %5s  %5s  %5s[-]\n",
-				nameW, "HOST", "OK", "FAIL", "CHGD", "SKIP", "UNRCH")
-
-			for host, s := range stats {
-				display := host
-				if len(display) > nameW {
-					display = display[:nameW-1] + "…"
-				}
-				indicator := "[green]●[-]"
-				if s.Failures > 0 {
-					indicator = "[red]●[-]"
-				}
-				failColor := ""
-				failEnd := ""
-				if s.Failures > 0 {
-					failColor = "[red]"
-					failEnd = "[-]"
-				}
-				fmt.Fprintf(v.textView, "  %s %-*s  [green]%5d[-]  %s%5d%s  [yellow]%5d[-]  [::d]%5d[-:-:-]  [::d]%5d[-:-:-]\n",
-					indicator, nameW, display, s.Ok, failColor, s.Failures, failEnd, s.Changed, s.Skipped, s.Unreachable)
-			}
+		if v.build == nil || v.build.LogURL != logURL {
+			return
 		}
 
-		if len(failed) > 0 {
-			fmt.Fprintf(v.textView, "\n[red]%s[-]\n", thickLine)
-			fmt.Fprintf(v.textView, "[bold][red]  Errors (%d)[-]\n", len(failed))
-			fmt.Fprintf(v.textView, "[red]%s[-]\n", thickLine)
-
-			for i, ft := range failed {
-				fmt.Fprintf(v.textView, "\n\n  [red][bold]ERROR %d/%d[-][-]\n", i+1, len(failed))
-				fmt.Fprintf(v.textView, "  [red][bold]✕[-][-] Task [bold]%s[-]  failed running on host [bold]%s[-]\n", ft.Task, ft.Host)
-
-				if ft.Cmd != "" {
-					fmt.Fprintln(v.textView)
-					fmt.Fprintf(v.textView, "  [::d]Command:[-:-:-]\n")
-					for _, line := range wrapText(ft.Cmd, 72) {
-						fmt.Fprintf(v.textView, "    [::d]%s[-:-:-]\n", line)
-					}
-				}
-
-				if ft.Msg != "" {
-					fmt.Fprintln(v.textView)
-					fmt.Fprintf(v.textView, "  [bold]Reason:[-]  [yellow]%s[-]\n", ft.Msg)
-				}
-
-				output := ft.Stdout
-				if output == "" {
-					output = ft.Stderr
-				}
-				if output != "" {
-					lines := strings.Split(output, "\n")
-					maxPreview := 30
-					if len(lines) > maxPreview {
-						lines = lines[len(lines)-maxPreview:]
-					}
-					fmt.Fprintln(v.textView)
-					fmt.Fprintf(v.textView, "  [bold]Output:[-]\n")
-					fmt.Fprintf(v.textView, "  [::d]────────────────────────────────────────────────────────────[-:-:-]\n")
-					for _, line := range lines {
-						if len(line) > 120 {
-							line = line[:120] + "…"
-						}
-						fmt.Fprintf(v.textView, "    %s\n", line)
-					}
-					fmt.Fprintf(v.textView, "  [::d]────────────────────────────────────────────────────────────[-:-:-]\n")
-				}
-
-				if i < len(failed)-1 {
-					fmt.Fprintf(v.textView, "\n\n[red]%s[-]\n", strings.Repeat("━", 80))
-				}
-			}
+		if err != nil {
+			v.renderBuildDetail(nil, nil, fmt.Sprintf("⚠ Could not load task summary: %v", err))
+			return
 		}
+
+		stats := api.AggregateStats(output)
+		failed := api.ExtractFailedTasks(output, stats)
+
+		v.mu.Lock()
+		v.jobOutput = output
+		v.failedTasks = failed
+		v.mu.Unlock()
+
+		v.renderBuildDetail(stats, failed, "")
 	})
 }
 
-func wrapText(s string, width int) []string {
-	if len(s) <= width {
-		return []string{s}
+func (v *BuildLogView) renderBuildDetail(stats map[string]api.HostStats, failed []api.FailedTask, loadMsg string) {
+	build := v.build
+	if build == nil {
+		return
 	}
-	var lines []string
-	for len(s) > width {
-		cut := width
-		if sp := strings.LastIndex(s[:cut], " "); sp > width/3 {
-			cut = sp
+
+	v.textView.SetChangedFunc(nil)
+	defer v.textView.SetChangedFunc(func() { v.app.Draw() })
+
+	// Clear all persistent views first
+	v.contentFlex.Clear()
+	v.infoView.Clear()
+	v.errorsHeader.Clear()
+	v.textView.Clear()
+
+	// --- Build Details (single column, fixed) ---
+	var infoLines []string
+	infoLines = append(infoLines, v.buildInfoLines()...)
+
+	// Task Summary
+	infoLines = append(infoLines,
+		"",
+		"[::b]Task Summary[-:-:-]",
+		"[::d]──────────────────────────────────[-:-:-]",
+		"",
+	)
+	summaryData := buildSummaryData(stats)
+	if len(summaryData) > 0 {
+		infoLines = append(infoLines, summaryData...)
+	} else if loadMsg != "" {
+		infoLines = append(infoLines, "[::d]"+loadMsg+"[-:-:-]")
+	}
+
+	for _, line := range infoLines {
+		fmt.Fprintln(v.infoView, line)
+	}
+	v.contentFlex.AddItem(v.infoView, len(infoLines), 0, false)
+
+	// --- Errors header (fixed) + content (scrollable) ---
+	if len(failed) > 0 {
+		fmt.Fprintf(v.errorsHeader, "\n[red::b]Errors[-:-:-]  [::d](%d)[-:-:-]    [#e5c07b]💡 press [white::b]a[-:-:-][#e5c07b] for AI analysis[-]\n", len(failed))
+		fmt.Fprintf(v.errorsHeader, "[::d]──────────────────────────────────[-:-:-]")
+		v.contentFlex.AddItem(v.errorsHeader, 3, 0, false)
+	} else if stats != nil && len(failed) == 0 {
+		fmt.Fprintf(v.errorsHeader, "\n[::d]✓ No task failures detected[-:-:-]")
+		v.contentFlex.AddItem(v.errorsHeader, 2, 0, false)
+	}
+
+	w := v.textView
+
+	if len(failed) > 0 {
+		for i, ft := range failed {
+			taskLine := fmt.Sprintf("\n[red]%d[-][::d]/%d[-:-:-] [red]✕[-] [white::b]%s[-:-:-] [#e5c07b]on[-] %s", i+1, len(failed), ft.Task, ft.Host)
+			if ft.Msg != "" {
+				taskLine += fmt.Sprintf(" [#e5c07b]return[-] [yellow]%s[-]", ft.Msg)
+			}
+			fmt.Fprintln(w, taskLine)
+			if ft.Cmd != "" {
+				fmt.Fprintf(w, "     [#e5c07b]cmd[-] [::d]$ %s[-:-:-]\n", truncateCmd(ft.Cmd, 120))
+			}
+
+			output := ft.Stdout
+			if output == "" {
+				output = ft.Stderr
+			}
+			if output != "" {
+				lines := strings.Split(output, "\n")
+				maxPreview := 15
+				if len(lines) > maxPreview {
+					lines = lines[len(lines)-maxPreview:]
+					fmt.Fprintf(w, "\n     [#e5c07b]output [-][::d](last %d lines)[-:-:-]\n", maxPreview)
+				} else {
+					fmt.Fprintf(w, "\n     [#e5c07b]output[-:-:-]\n")
+				}
+				fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", strings.Repeat("═", 72))
+				for _, line := range lines {
+					if len(line) > 120 {
+						line = line[:120] + "…"
+					}
+					fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", line)
+				}
+				fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", strings.Repeat("═", 72))
+			}
 		}
-		lines = append(lines, s[:cut])
-		s = strings.TrimLeft(s[cut:], " ")
 	}
-	if s != "" {
-		lines = append(lines, s)
+
+	v.contentFlex.AddItem(v.textView, 0, 1, true)
+	v.app.SetFocus(v.textView)
+}
+
+func (v *BuildLogView) buildInfoLines() []string {
+	build := v.build
+	row := func(name, value string) string {
+		return fmt.Sprintf("[#78788c]%-12s[-]%s", name, value)
+	}
+
+	resultValue := fmt.Sprintf("%s  %s", resultEmoji(build.Result), resultTag(build.Result))
+	if !isVoting(build.Voting) {
+		resultValue += "  [yellow]non-voting[-]"
+	}
+
+	bookmarked := ""
+	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
+		bookmarked = "  [yellow]★ saved[-]"
+	}
+
+	lines := []string{
+		"",
+		"[::b]Build Details[-:-:-]",
+		"[::d]──────────────────────────────────[-:-:-]",
+		"",
+		fmt.Sprintf("[#78788c]%-12s[-]%s%s", "Result", resultValue, bookmarked),
+		row("Duration", formatBuildDuration(build.Duration)),
+	}
+	if build.ErrorDetail != "" {
+		lines = append(lines, fmt.Sprintf("[#78788c]%-12s[-][red]%s[-]", "Error", build.ErrorDetail))
+	}
+	if isHeld(build.Held) {
+		lines = append(lines, fmt.Sprintf("[#78788c]%-12s[-][yellow::b]NODE HELD[-:-:-]  [::d]for post-failure debugging[-:-:-]", "Held"))
+	}
+
+	lines = append(lines,
+		"",
+		row("UUID", build.UUID),
+		fmt.Sprintf("[#78788c]%-12s[-][#3884f4]%s[-]", "Job", build.JobName),
+		row("Project", build.Ref.Project),
+		row("Branch", build.Ref.Branch),
+	)
+	if build.Ref.Change != nil && build.Ref.Patchset != nil {
+		lines = append(lines, row("Change", fmt.Sprintf("%v,%v", build.Ref.Change, build.Ref.Patchset)))
+	} else if build.Ref.Ref != "" {
+		lines = append(lines, row("Ref", build.Ref.Ref))
+	}
+	if build.Ref.Newrev != "" {
+		rev := build.Ref.Newrev
+		if len(rev) > 10 {
+			rev = rev[:10]
+		}
+		lines = append(lines, row("Revision", rev))
+	}
+	lines = append(lines,
+		row("Pipeline", build.Pipeline),
+		row("Nodeset", build.Nodeset),
+		row("Start", formatTimestampFull(build.StartTime)),
+		row("End", formatTimestampFull(build.EndTime)),
+	)
+	if build.Ref.RefURL != "" {
+		lines = append(lines, fmt.Sprintf("[#78788c]%-12s[-][::d]%s[-:-:-]", "Change URL", build.Ref.RefURL))
+	}
+	if build.LogURL != "" {
+		lines = append(lines, fmt.Sprintf("[#78788c]%-12s[-][::d]%s[-:-:-]", "Log URL", build.LogURL))
 	}
 	return lines
 }
 
+func buildSummaryData(stats map[string]api.HostStats) []string {
+	if len(stats) == 0 {
+		return nil
+	}
+	nameW := 4
+	for host := range stats {
+		if len(host) > nameW {
+			nameW = len(host)
+		}
+	}
+	if nameW > 18 {
+		nameW = 18
+	}
+	lines := []string{
+		fmt.Sprintf("[::d]  %-*s  %5s  %5s  %5s  %5s  %5s[-:-:-]", nameW, "HOST", "OK", "FAIL", "CHGD", "SKIP", "UNRCH"),
+	}
+	for host, s := range stats {
+		display := host
+		if len(display) > nameW {
+			display = display[:nameW-1] + "…"
+		}
+		indicator := "[green]●[-]"
+		if s.Failures > 0 {
+			indicator = "[red]●[-]"
+		}
+		failStr := fmt.Sprintf("%5d", s.Failures)
+		if s.Failures > 0 {
+			failStr = fmt.Sprintf("[red]%5d[-]", s.Failures)
+		}
+		lines = append(lines, fmt.Sprintf("%s %-*s  [green]%5d[-]  %s  [yellow]%5d[-]  [::d]%5d[-:-:-]  [::d]%5d[-:-:-]",
+			indicator, nameW, display, s.Ok, failStr, s.Changed, s.Skipped, s.Unreachable))
+	}
+	return lines
+}
+
+func truncateCmd(s string, max int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) > max {
+		return s[:max] + "…"
+	}
+	return s
+}
 
 func resultTag(result string) string {
 	switch result {
 	case "SUCCESS":
-		return "[green]SUCCESS[-]"
+		return "[green::b]SUCCESS[-:-:-]"
 	case "FAILURE", "ERROR":
-		return "[red]" + result + "[-]"
+		return "[red::b]" + result + "[-:-:-]"
 	case "LOST", "ABORTED", "TIMED_OUT":
-		return "[yellow]" + result + "[-]"
+		return "[yellow::b]" + result + "[-:-:-]"
 	default:
-		return "[#3884f4]" + result + "[-]"
+		return "[#3884f4::b]" + result + "[-:-:-]"
 	}
 }
+
+func isVoting(v any) bool {
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		return val == "true" || val == "1"
+	}
+	return true
+}
+
+func isHeld(v any) bool {
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		return val == "true" || val == "1"
+	}
+	return false
+}
+
+func formatTimestampFull(ts string) string {
+	if ts == "" {
+		return "—"
+	}
+	for _, layout := range []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05.000000",
+	} {
+		if t, err := time.Parse(layout, ts); err == nil {
+			abs := t.Format("Mon 02 Jan 15:04")
+			diff := time.Since(t)
+			var rel string
+			switch {
+			case diff < time.Minute:
+				rel = "just now"
+			case diff < time.Hour:
+				rel = fmt.Sprintf("%dm ago", int(diff.Minutes()))
+			case diff < 24*time.Hour:
+				rel = fmt.Sprintf("%dh %dm ago", int(diff.Hours()), int(diff.Minutes())%60)
+			default:
+				rel = fmt.Sprintf("%dd ago", int(diff.Hours()/24))
+			}
+			return fmt.Sprintf("%s  [::d](%s)[-:-:-]", abs, rel)
+		}
+	}
+	if len(ts) > 16 {
+		return ts[:16]
+	}
+	return ts
+}
+
+
+func resultEmoji(result string) string {
+	switch result {
+	case "SUCCESS":
+		return "[green]✓[-]"
+	case "FAILURE", "ERROR":
+		return "[red]✕[-]"
+	case "TIMED_OUT":
+		return "[yellow]⏱[-]"
+	case "LOST", "ABORTED":
+		return "[yellow]⚠[-]"
+	default:
+		return "[#3884f4]●[-]"
+	}
+}
+
 
 func (v *BuildLogView) startAnalysis() {
 	if v.build == nil {
