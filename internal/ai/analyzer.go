@@ -54,30 +54,41 @@ func providerOrder(provider string) []providerFactory {
 		return []providerFactory{vertexFactory}
 	case "anthropic":
 		return []providerFactory{anthropicFactory}
-	// Future providers:
-	// case "ollama":
-	//     return []providerFactory{ollamaFactory}
-	// case "openai":
-	//     return []providerFactory{openaiFactory}
+	case "gemini":
+		return []providerFactory{geminiDirectFactory}
+	case "gemini-vertex":
+		return []providerFactory{geminiVertexFactory}
 	default: // "auto"
-		return []providerFactory{vertexFactory, anthropicFactory}
+		return []providerFactory{vertexFactory, anthropicFactory, geminiVertexFactory, geminiDirectFactory}
 	}
 }
 
 func vertexFactory(cfg config.AIConfig) Provider {
-	p := NewVertexAI(cfg)
-	if p == nil {
-		return nil
+	if p := NewVertexAI(cfg); p != nil {
+		return p
 	}
-	return p
+	return nil
 }
 
 func anthropicFactory(cfg config.AIConfig) Provider {
-	p := NewAnthropicDirect(cfg)
-	if p == nil {
-		return nil
+	if p := NewAnthropicDirect(cfg); p != nil {
+		return p
 	}
-	return p
+	return nil
+}
+
+func geminiDirectFactory(cfg config.AIConfig) Provider {
+	if p := NewGeminiDirect(cfg); p != nil {
+		return p
+	}
+	return nil
+}
+
+func geminiVertexFactory(cfg config.AIConfig) Provider {
+	if p := NewGeminiVertex(cfg); p != nil {
+		return p
+	}
+	return nil
 }
 
 // ProviderName returns the active provider's display name.

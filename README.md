@@ -17,6 +17,9 @@ Monitor pipelines, browse builds, stream logs, and manage your Zuul instance —
 - **Tenant Picker** — Switch between tenants on the fly
 - **Kerberos Auth** — SPNEGO authentication for enterprise Zuul instances
 - **Multi-Instance** — Config profiles for multiple Zuul deployments (like kubeconfig)
+- **AI Analysis** *(Experimental)* — AI-powered build failure diagnosis with Claude and Gemini
+- **Admin Actions** — Dequeue and promote builds (with auth)
+- **Bookmarks** — Save builds for quick access
 - **Auto-Refresh** — Views refresh every 30 seconds
 - **Keyboard-Driven** — vim-style navigation, no mouse needed
 
@@ -119,6 +122,8 @@ hzuul --context opendev
 | `Enter`       | Open detail               |
 | `l`           | Stream log (Builds view)  |
 | `d`           | Download logs (Build detail) |
+| `a`           | AI analysis (Build detail) |
+| `s`           | Save/unsave bookmark      |
 | `q` / `Esc`   | Quit / Back               |
 | `?`           | Help                      |
 
@@ -137,6 +142,56 @@ Press `d` in any build detail view to download the full build logs to disk.
 | `d`                  | Remove from history |
 | `x`                  | Cancel active download |
 | `o`                  | Open download directory |
+
+## AI Analysis (Experimental)
+
+HZUUL can analyze build failures using AI, directly from the TUI. Press `a` in any build detail or downloaded logs view to get an instant diagnosis.
+
+Supports multiple providers:
+
+| Provider | Config `provider` | Auth |
+|---|---|---|
+| Claude (Anthropic) | `anthropic` | API key |
+| Claude (Vertex AI) | `vertex` | `gcloud` credentials |
+| Gemini (AI Studio) | `gemini` | API key |
+| Gemini (Vertex AI) | `gemini-vertex` | `gcloud` credentials |
+
+### Quick setup
+
+Add to your `~/.hzuul/config.yaml`:
+
+```yaml
+# Anthropic API
+ai:
+  provider: anthropic
+  anthropic_api_key: sk-ant-...
+
+# Or Google Vertex AI (Claude)
+ai:
+  provider: vertex
+  vertex_project_id: my-gcp-project
+  vertex_region: us-east5
+
+# Or Gemini (AI Studio)
+ai:
+  provider: gemini
+  gemini_api_key: AIza...
+
+# Or Gemini (Vertex AI)
+ai:
+  provider: gemini-vertex
+  vertex_project_id: my-gcp-project
+  vertex_region: us-central1
+```
+
+Set `provider: auto` (or omit it) to let HZUUL pick the first available provider.
+
+### How it works
+
+- **Quick Analysis** (`a` from build detail) — analyzes build metadata and task failures from the Zuul API output
+- **Full Analysis** (`a` from downloaded logs) — reads the complete log files for deeper context
+- Streaming responses with follow-up questions supported
+- No data leaves your machine unless you explicitly configure an AI provider
 
 ## CLI Flags
 

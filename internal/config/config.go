@@ -15,9 +15,10 @@ type Config struct {
 }
 
 type AIConfig struct {
-	Provider        string `yaml:"provider,omitempty"`         // "vertex", "anthropic", or "auto" (default)
+	Provider        string `yaml:"provider,omitempty"`         // "vertex", "anthropic", "gemini", "gemini-vertex", or "auto" (default)
 	Model           string `yaml:"model,omitempty"`            // model override
 	AnthropicAPIKey string `yaml:"anthropic_api_key,omitempty"`
+	GeminiAPIKey    string `yaml:"gemini_api_key,omitempty"`
 	VertexProjectID string `yaml:"vertex_project_id,omitempty"`
 	VertexRegion    string `yaml:"vertex_region,omitempty"`    // default: us-east5
 }
@@ -107,7 +108,7 @@ func (c *Config) SaveWithDefaults(path string) error {
 	if path == "" {
 		path = defaultPath()
 	}
-	if c.AI.Provider == "" && c.AI.AnthropicAPIKey == "" && c.AI.VertexProjectID == "" {
+	if c.AI.Provider == "" && c.AI.AnthropicAPIKey == "" && c.AI.GeminiAPIKey == "" && c.AI.VertexProjectID == "" {
 		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return nil
@@ -133,7 +134,18 @@ const aiConfigComment = `
 #   vertex_project_id: my-gcp-project
 #   vertex_region: us-east5
 #
-# model: claude-sonnet-4-20250514  # optional model override
+# Google Gemini (AI Studio, API key):
+# ai:
+#   provider: gemini
+#   gemini_api_key: AIza...
+#
+# Google Gemini (via Vertex AI, gcloud auth):
+# ai:
+#   provider: gemini-vertex
+#   vertex_project_id: my-gcp-project
+#   vertex_region: us-central1
+#
+# model: gemini-2.5-pro  # optional model override
 `
 
 func defaultConfig() *Config {
