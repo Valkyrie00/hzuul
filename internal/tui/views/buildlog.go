@@ -484,8 +484,9 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 			buf.Reset()
 			bufMu.Unlock()
 			if remaining != "" {
+				colored := colorizeLogChunk(remaining)
 				v.app.QueueUpdateDraw(func() {
-					fmt.Fprint(v.textView, remaining)
+					fmt.Fprint(v.textView, colored)
 					v.textView.ScrollToEnd()
 				})
 			}
@@ -496,8 +497,9 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 			buf.Reset()
 			bufMu.Unlock()
 			if chunk != "" {
+				colored := colorizeLogChunk(chunk)
 				v.app.QueueUpdateDraw(func() {
-					fmt.Fprint(v.textView, chunk)
+					fmt.Fprint(v.textView, colored)
 					v.textView.ScrollToEnd()
 				})
 			}
