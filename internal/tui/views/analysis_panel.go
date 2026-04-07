@@ -180,7 +180,9 @@ func (p *AnalysisPanel) WriteNoAI() {
 	fmt.Fprintf(w, "  [::d]  ai:[-:-:-]\n")
 	fmt.Fprintf(w, "  [::d]    provider: vertex[-:-:-]\n")
 	fmt.Fprintf(w, "  [::d]    vertex_project_id: my-project[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]    vertex_region: us-east5[-:-:-]\n")
+	fmt.Fprintf(w, "  [::d]    vertex_region: us-east5[-:-:-]\n\n")
+	fmt.Fprintf(w, "  [::d]  ... and more (Gemini, Gemini Vertex AI, etc.)[-:-:-]\n\n")
+	fmt.Fprintf(w, "  [::d]See the HZUUL README for all supported providers and setup details.[-:-:-]\n")
 }
 
 func (p *AnalysisPanel) StartAI(systemPrompt, userPrompt string) {
