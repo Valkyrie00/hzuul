@@ -221,7 +221,7 @@ func (v *BookmarksView) renderTable() {
 			tenant = "—"
 		}
 
-		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(r.Result)+" "+r.JobName).SetTextColor(rc).SetExpansion(1))
+		v.table.SetCell(row, 0, coloredCell(" "+resultIcon(r.Result)+" "+r.JobName, rc).SetExpansion(1))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+r.Project).SetTextColor(muted).SetMaxWidth(40))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+r.Branch).SetTextColor(muted).SetMaxWidth(15))
 		v.table.SetCell(row, 3, tview.NewTableCell(" "+host).SetTextColor(dim).SetMaxWidth(30))

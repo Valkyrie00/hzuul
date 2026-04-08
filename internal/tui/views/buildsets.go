@@ -339,7 +339,7 @@ func (v *BuildsetsView) showDetail(bs api.Buildset) {
 				if bv, ok := b.Voting.(bool); ok && !bv {
 					voting = "no"
 				}
-				v.detailTbl.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(brc).SetExpansion(1))
+				v.detailTbl.SetCell(row, 0, coloredCell(" "+resultIcon(b.Result)+" "+b.JobName, brc).SetExpansion(1))
 				v.detailTbl.SetCell(row, 1, resultCell(b.Result))
 				v.detailTbl.SetCell(row, 2, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))
 				v.detailTbl.SetCell(row, 3, tview.NewTableCell(" "+voting).SetTextColor(muted))
@@ -391,7 +391,7 @@ func (v *BuildsetsView) renderRows(fromIdx int) {
 		change := buildsetChange(bs)
 
 		rc := resultColor(bs.Result)
-		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(bs.Result)+" "+bs.Pipeline).SetTextColor(rc))
+		v.table.SetCell(row, 0, coloredCell(" "+resultIcon(bs.Result)+" "+bs.Pipeline, rc))
 		v.table.SetCell(row, 1, resultCell(bs.Result))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+projStr).SetTextColor(muted).SetMaxWidth(50).SetExpansion(1))
 		v.table.SetCell(row, 3, tview.NewTableCell(" "+change).SetTextColor(ColorAccent))

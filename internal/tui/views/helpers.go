@@ -61,7 +61,13 @@ func resultCell(result string) *tview.TableCell {
 	if display == "" {
 		display = "RUNNING"
 	}
-	return tview.NewTableCell(" " + display).SetTextColor(resultColor(result))
+	return coloredCell(" "+display, resultColor(result))
+}
+
+func coloredCell(text string, color tcell.Color) *tview.TableCell {
+	cell := tview.NewTableCell(text).SetTextColor(color)
+	cell.SetSelectedStyle(tcell.StyleDefault.Background(ColorSelectBg).Foreground(color))
+	return cell
 }
 
 func resultIcon(result string) string {
@@ -186,7 +192,7 @@ func renderBuildRows(table *tview.Table, builds []api.Build, primaryField func(a
 	for i, b := range builds {
 		row := i + 1
 		rc := resultColor(b.Result)
-		table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+primaryField(b)).SetTextColor(rc))
+		table.SetCell(row, 0, coloredCell(" "+resultIcon(b.Result)+" "+primaryField(b), rc))
 		table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted))
 		table.SetCell(row, 2, tview.NewTableCell(" "+b.Pipeline).SetTextColor(muted))
 		table.SetCell(row, 3, tview.NewTableCell(" "+formatChange(b.Ref)).SetTextColor(muted))

@@ -409,7 +409,6 @@ func (v *StatusView) rebuildTable() {
 			}
 
 			running, success, failure, other := jobCounts(sr.item.Jobs)
-			bar := compactProgress(running, success, failure, other, total)
 			summary := jobSummaryText(running, success, failure, other)
 			elapsed := formatElapsed(sr.item.EnqueueTime, now)
 
@@ -421,6 +420,7 @@ func (v *StatusView) rebuildTable() {
 			v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf("   %s %s", arrow, project)).SetTextColor(tcell.ColorWhite).SetExpansion(1))
 			v.table.SetCell(tableRow, 1, tview.NewTableCell(" #"+displayID).SetTextColor(muted).SetExpansion(0))
 			v.table.SetCell(tableRow, 2, tview.NewTableCell(" "+owner).SetTextColor(tcell.NewRGBColor(180, 160, 220)).SetExpansion(0))
+			bar := compactProgress(running, success, failure, other, total)
 			v.table.SetCell(tableRow, 3, tview.NewTableCell(" "+bar).SetExpansion(0))
 			v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
 			v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+summary).SetTextColor(muted))
@@ -440,14 +440,13 @@ func (v *StatusView) rebuildTable() {
 						nv = " (nv)"
 					}
 					jobElapsed, _ := jobTimeParts(job, now)
-					resultText := jobResultText(result)
 
-					v.table.SetCell(tableRow, 0, tview.NewTableCell("       "+jobIcon(result)+" "+job.Name+nv).SetTextColor(nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 0, coloredCell("       "+jobIcon(result)+" "+job.Name+nv, nameColor).SetExpansion(1).SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 1, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 2, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 3, tview.NewTableCell("").SetBackgroundColor(jobBg))
 					v.table.SetCell(tableRow, 4, tview.NewTableCell(jobElapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetBackgroundColor(jobBg))
-					v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+resultText).SetBackgroundColor(jobBg))
+					v.table.SetCell(tableRow, 5, jobResultCell(result).SetBackgroundColor(jobBg))
 					tableRow++
 				}
 			}
@@ -629,21 +628,25 @@ func (v *StatusView) executeAdminAction() {
 	}()
 }
 
-func jobResultText(result string) string {
+func jobResultCell(result string) *tview.TableCell {
+	display := result
+	if result == "running" {
+		display = "RUNNING"
+	}
+	var color tcell.Color
 	switch result {
 	case "SUCCESS":
-		return "[#48c78e]SUCCESS[-]"
+		color = tcell.NewRGBColor(72, 199, 142)
 	case "FAILURE", "ERROR", "NODE_FAILURE":
-		return "[#eb5757]" + result + "[-]"
+		color = tcell.NewRGBColor(235, 87, 87)
 	case "RETRY_LIMIT", "LOST", "ABORTED", "DISK_FULL", "TIMED_OUT":
-		return "[#f2c94c]" + result + "[-]"
-	case "SKIPPED":
-		return "[#78788c]SKIPPED[-]"
+		color = tcell.NewRGBColor(242, 201, 76)
 	case "running":
-		return "[#3884f4]RUNNING[-]"
+		color = tcell.NewRGBColor(56, 132, 244)
 	default:
-		return "[#78788c]" + result + "[-]"
+		color = tcell.NewRGBColor(120, 120, 140)
 	}
+	return coloredCell(" "+display, color)
 }
 
 // parseJobStreamURL extracts the UUID and logfile from a JobStatus.

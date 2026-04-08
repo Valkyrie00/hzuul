@@ -180,7 +180,7 @@ func (v *DownloadsView) showAnalysisResults(rec *DownloadRecord, da *ai.DirAnaly
 
 func (v *DownloadsView) renderTable() {
 	v.table.Clear()
-	setTableHeader(v.table, "Job", "Project", "Instance", "Status", "Progress", "Size", "Date")
+	setTableHeader(v.table, "Job", "Project", "Build", "Instance", "Status", "Progress", "Size", "Date")
 
 	records := v.manager.Records()
 	if len(records) == 0 {
@@ -206,29 +206,38 @@ func (v *DownloadsView) renderTable() {
 			host = "—"
 		}
 
+		shortUUID := r.UUID
+		if len(shortUUID) > 8 {
+			shortUUID = shortUUID[len(shortUUID)-8:]
+		}
+
 		v.table.SetCell(row, 0, tview.NewTableCell(" "+r.JobName).SetTextColor(tcell.ColorWhite).SetExpansion(1))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+r.Project).SetTextColor(muted).SetMaxWidth(35))
-		v.table.SetCell(row, 2, tview.NewTableCell(" "+host).SetTextColor(dim).SetMaxWidth(30))
-		v.table.SetCell(row, 3, statusCell)
-		v.table.SetCell(row, 4, tview.NewTableCell(" "+progressText).SetTextColor(muted))
-		v.table.SetCell(row, 5, tview.NewTableCell(" "+sizeText).SetTextColor(muted))
-		v.table.SetCell(row, 6, tview.NewTableCell(" "+dateText).SetTextColor(dim))
+		v.table.SetCell(row, 2, tview.NewTableCell(" "+shortUUID).SetTextColor(dim))
+		v.table.SetCell(row, 3, tview.NewTableCell(" "+host).SetTextColor(dim).SetMaxWidth(30))
+		v.table.SetCell(row, 4, statusCell)
+		v.table.SetCell(row, 5, tview.NewTableCell(" "+progressText).SetTextColor(muted))
+		v.table.SetCell(row, 6, tview.NewTableCell(" "+sizeText).SetTextColor(muted))
+		v.table.SetCell(row, 7, tview.NewTableCell(" "+dateText).SetTextColor(dim))
 	}
 }
 
 func statusCellForDL(s DLStatus) *tview.TableCell {
+	var text string
+	var color tcell.Color
 	switch s {
 	case DLCompleted:
-		return tview.NewTableCell(" [green]COMPLETED[-]")
+		text, color = "COMPLETED", tcell.ColorGreen
 	case DLFailed:
-		return tview.NewTableCell(" [red]FAILED[-]")
+		text, color = "FAILED", tcell.ColorRed
 	case DLCancelled:
-		return tview.NewTableCell(" [yellow]CANCELLED[-]")
+		text, color = "CANCELLED", tcell.ColorYellow
 	case DLDownloading:
-		return tview.NewTableCell(" [#3884f4]DOWNLOADING[-]")
+		text, color = "DOWNLOADING", tcell.ColorBlue
 	default:
 		return tview.NewTableCell(" " + string(s))
 	}
+	return coloredCell(" "+text, color)
 }
 
 func progressTextForDL(r DownloadRecord) string {

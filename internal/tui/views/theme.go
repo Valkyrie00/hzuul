@@ -15,5 +15,4 @@ var (
 
 var SelectedStyle = tcell.StyleDefault.
 	Background(ColorSelectBg).
-	Foreground(tcell.ColorWhite).
-	Attributes(tcell.AttrBold)
+	Foreground(tcell.ColorWhite)

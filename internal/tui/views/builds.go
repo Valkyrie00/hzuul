@@ -350,7 +350,7 @@ func (v *BuildsView) renderRows(fromIdx int) {
 		b := v.builds[i]
 		v.indexMap = append(v.indexMap, i)
 		rc := resultColor(b.Result)
-		v.table.SetCell(row, 0, tview.NewTableCell(" "+resultIcon(b.Result)+" "+b.JobName).SetTextColor(rc).SetExpansion(1))
+		v.table.SetCell(row, 0, coloredCell(" "+resultIcon(b.Result)+" "+b.JobName, rc).SetExpansion(1))
 		v.table.SetCell(row, 1, tview.NewTableCell(" "+b.Ref.Project).SetTextColor(muted).SetMaxWidth(45))
 		v.table.SetCell(row, 2, tview.NewTableCell(" "+b.Ref.Branch).SetTextColor(muted).SetMaxWidth(15))
 		v.table.SetCell(row, 3, tview.NewTableCell(" "+formatBuildDuration(b.Duration)).SetTextColor(muted))

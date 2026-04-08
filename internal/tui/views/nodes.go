@@ -109,5 +109,5 @@ func stateCell(state string) *tview.TableCell {
 	default:
 		color = tcell.NewRGBColor(120, 120, 140)
 	}
-	return tview.NewTableCell(" " + state).SetTextColor(color)
+	return coloredCell(" "+state, color)
 }
