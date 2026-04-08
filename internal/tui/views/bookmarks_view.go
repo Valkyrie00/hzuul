@@ -228,7 +228,7 @@ func (v *BookmarksView) renderTable() {
 		v.table.SetCell(row, 4, tview.NewTableCell(" "+tenant).SetTextColor(muted).SetMaxWidth(25))
 		v.table.SetCell(row, 5, resultCell(r.Result))
 		v.table.SetCell(row, 6, tview.NewTableCell(" "+truncate(r.Pipeline, 20)).SetTextColor(muted))
-		v.table.SetCell(row, 7, tview.NewTableCell(" "+r.Change).SetTextColor(ColorAccent))
+		v.table.SetCell(row, 7, tview.NewTableCell(" "+truncate(r.Change, 12)).SetTextColor(ColorAccent))
 		v.table.SetCell(row, 8, tview.NewTableCell(" "+formatDLDate(r.SavedAt)).SetTextColor(dim))
 	}
 }
