@@ -67,8 +67,12 @@ func colorizeLogLine(line string) string {
 		return prefix + content[:len(content)-2] + "[green]ok[-]"
 	case strings.HasSuffix(trimmed, "... FAILED"):
 		return prefix + content[:len(content)-6] + "[red::b]FAILED[-:-:-]"
+	case strings.HasPrefix(trimmed, "RUNNING HANDLER"):
+		return prefix + "[white::b]" + content + "[-:-:-]"
+	case trimmed == "" || strings.Contains(trimmed, "********"):
+		return prefix + "[::d]" + content + "[-:-:-]"
 	default:
-		return prefix + content
+		return prefix + "[::d]" + content + "[-:-:-]"
 	}
 }
 
