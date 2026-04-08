@@ -171,6 +171,7 @@ func (v *DownloadsView) showAnalysisResults(rec *DownloadRecord, da *ai.DirAnaly
 	input := ai.DirAnalysisInput{
 		JobName: rec.JobName,
 		Project: rec.Project,
+		DestDir: rec.DestDir,
 	}
 	systemPrompt := ai.GetSystemPrompt()
 	userPrompt := ai.BuildDirAnalysisPrompt(input, da)

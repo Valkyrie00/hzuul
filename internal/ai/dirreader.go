@@ -10,14 +10,26 @@ import (
 	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
-const maxLogFileSize = 512 * 1024 // 512 KB per file
-const maxTotalLogContext = 128 * 1024 // 128 KB total for the prompt
+const maxLogFileSize = 1024 * 1024   // 1 MB per file (tail)
+const maxTotalLogContext = 768 * 1024 // 768 KB total for the prompt
+const maxSnippetLines = 300
+
+// priorityFiles are read first and given more generous space.
+var priorityFiles = []string{
+	"console.log",
+	"job-output.json",
+	"tempest.log",
+	"devstack.log",
+	"devstack-gate.log",
+	"syslog",
+}
 
 type DirAnalysis struct {
 	JobOutput   []api.PlaybookOutput
 	FailedTasks []api.FailedTask
 	LogContext  []LogBlock
 	LogFiles    []LogFileSnippet
+	AllFiles    []string
 }
 
 type LogFileSnippet struct {
@@ -41,7 +53,11 @@ func ReadLogsFromDir(destDir string) (*DirAnalysis, error) {
 		}
 	}
 
+	result.AllFiles = listAllFiles(destDir)
+
 	logFiles := collectLogFiles(destDir)
+	logFiles = prioritizeFiles(logFiles)
+
 	var totalCtx int
 	for _, lf := range logFiles {
 		if totalCtx >= maxTotalLogContext {
@@ -79,6 +95,21 @@ func ReadLogsFromDir(destDir string) (*DirAnalysis, error) {
 	return result, nil
 }
 
+func listAllFiles(root string) []string {
+	var files []string
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		if rel != "" {
+			files = append(files, rel)
+		}
+		return nil
+	})
+	return files
+}
+
 func findFile(root, name string) string {
 	var found string
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -105,8 +136,9 @@ func collectLogFiles(root string) []string {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(name))
-		if ext == ".txt" || ext == ".log" || ext == ".json" || ext == "" {
-			if info.Size() > 0 && info.Size() < 10*1024*1024 {
+		switch ext {
+		case ".txt", ".log", ".json", ".conf", ".yaml", ".yml", ".html", ".xml", ".csv", "":
+			if info.Size() > 0 && info.Size() < 20*1024*1024 {
 				files = append(files, path)
 			}
 		}
@@ -123,12 +155,30 @@ func collectLogFiles(root string) []string {
 	return files
 }
 
+// prioritizeFiles moves known important log files to the front.
+func prioritizeFiles(files []string) []string {
+	prio := make([]string, 0, len(files))
+	rest := make([]string, 0, len(files))
+	prioSet := make(map[string]bool, len(priorityFiles))
+	for _, p := range priorityFiles {
+		prioSet[p] = true
+	}
+	for _, f := range files {
+		if prioSet[filepath.Base(f)] {
+			prio = append(prio, f)
+		} else {
+			rest = append(rest, f)
+		}
+	}
+	return append(prio, rest...)
+}
+
 func extractRelevantSnippet(content string) string {
 	lines := strings.Split(content, "\n")
-	if len(lines) <= 60 {
+	if len(lines) <= maxSnippetLines {
 		return content
 	}
-	return strings.Join(lines[len(lines)-60:], "\n")
+	return strings.Join(lines[len(lines)-maxSnippetLines:], "\n")
 }
 
 func mergeStats(output []api.PlaybookOutput) map[string]api.HostStats {

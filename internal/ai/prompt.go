@@ -57,6 +57,16 @@ func BuildDirAnalysisPrompt(rec DirAnalysisInput, da *DirAnalysis) string {
 	fmt.Fprintf(&b, "Analyze this Zuul CI build failure using downloaded log files:\n\n")
 	fmt.Fprintf(&b, "Job: %s\n", rec.JobName)
 	fmt.Fprintf(&b, "Project: %s\n", rec.Project)
+	if rec.DestDir != "" {
+		fmt.Fprintf(&b, "Log directory: %s\n", rec.DestDir)
+	}
+
+	if len(da.AllFiles) > 0 {
+		fmt.Fprintf(&b, "\n--- Complete file listing (%d files) ---\n", len(da.AllFiles))
+		for _, f := range da.AllFiles {
+			fmt.Fprintf(&b, "  %s\n", f)
+		}
+	}
 
 	writeFailedTasks(&b, da.FailedTasks)
 	writeLogContext(&b, da.LogContext, 6)
@@ -68,13 +78,17 @@ func BuildDirAnalysisPrompt(rec DirAnalysisInput, da *DirAnalysis) string {
 		}
 	}
 
-	fmt.Fprintf(&b, "\nProvide a concise analysis: root cause, category, and recommended action.")
+	fmt.Fprintf(&b, "\nThe user has the full log files at the directory shown above. ")
+	fmt.Fprintf(&b, "When referencing specific files, use the relative paths from the listing. ")
+	fmt.Fprintf(&b, "If the snippets aren't enough, suggest which file the user should look at for more detail.")
+	fmt.Fprintf(&b, "\n\nProvide a concise analysis: root cause, category, and recommended action.")
 	return b.String()
 }
 
 type DirAnalysisInput struct {
 	JobName string
 	Project string
+	DestDir string
 }
 
 func GetSystemPrompt() string {
