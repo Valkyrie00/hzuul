@@ -219,6 +219,26 @@ func (c *Client) RawGet(rawURL string) (*http.Response, error) {
 	return resp, nil
 }
 
+// FetchFileContent downloads a file from an absolute URL and returns its content as a string.
+// maxBytes limits how much data is read (0 = no limit).
+func (c *Client) FetchFileContent(rawURL string, maxBytes int64) (string, error) {
+	resp, err := c.RawGet(rawURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var reader io.Reader = resp.Body
+	if maxBytes > 0 {
+		reader = io.LimitReader(resp.Body, maxBytes)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", rawURL, err)
+	}
+	return string(data), nil
+}
+
 func (c *Client) tenantPath(suffix string) string {
 	return fmt.Sprintf("/api/tenant/%s/%s", c.tenant, suffix)
 }

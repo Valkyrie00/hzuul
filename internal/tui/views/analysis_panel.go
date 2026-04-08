@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type AnalysisMode string
@@ -88,11 +88,11 @@ func NewAnalysisPanel(app *tview.Application, aiCfg config.AIConfig) *AnalysisPa
 	}
 }
 
-func (p *AnalysisPanel) Root() *tview.Flex     { return p.layout }
-func (p *AnalysisPanel) IsActive() bool        { return p.active }
-func (p *AnalysisPanel) IsStreaming() bool      { return p.streaming }
-func (p *AnalysisPanel) IsInputActive() bool   { return p.inputActive }
-func (p *AnalysisPanel) HasAnalyzer() bool      { return p.analyzer != nil }
+func (p *AnalysisPanel) Root() *tview.Flex        { return p.layout }
+func (p *AnalysisPanel) IsActive() bool           { return p.active }
+func (p *AnalysisPanel) IsStreaming() bool        { return p.streaming }
+func (p *AnalysisPanel) IsInputActive() bool      { return p.inputActive }
+func (p *AnalysisPanel) HasAnalyzer() bool        { return p.analyzer != nil }
 func (p *AnalysisPanel) Content() *tview.TextView { return p.content }
 
 func (p *AnalysisPanel) SetOnKeysChanged(fn func()) { p.onKeysChanged = fn }
@@ -191,26 +191,29 @@ func (p *AnalysisPanel) StartAI(systemPrompt, userPrompt string) {
 		return
 	}
 
-	thickLine := "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-	fmt.Fprintf(p.content, "\n[#e5c07b]%s[-]\n", thickLine)
-	fmt.Fprintf(p.content, "[bold][#e5c07b]  AI Analysis[-] [#e5c07b](%s · %s)[-]", p.analyzer.ProviderName(), p.analyzer.ModelName())
-	if p.mode == AnalysisBasic {
-		fmt.Fprintf(p.content, " [::d]— download logs (d) for full analysis[-:-:-]")
-	}
-	fmt.Fprint(p.content, "\n")
-	fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n\n", thickLine)
-
+	p.writeAIHeader()
 	p.history = append(p.history, "User: "+userPrompt)
 	p.runAI(systemPrompt, userPrompt)
+}
+
+func (p *AnalysisPanel) writeAIHeader() {
+	thickLine := "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	fmt.Fprintf(p.content, "\n[#e5c07b]%s[-]\n", thickLine)
+	fmt.Fprintf(p.content, "[bold][#e5c07b]AI Analysis[-] [#e5c07b](%s · %s)[-]", p.analyzer.ProviderName(), p.analyzer.ModelName())
+	if p.mode == AnalysisBasic {
+		fmt.Fprintf(p.content, " [::d]— download logs for full analysis[-:-:-]")
+	}
+	fmt.Fprint(p.content, "\n")
+	fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n", thickLine)
 }
 
 func (p *AnalysisPanel) runAI(systemPrompt, userPrompt string) {
 	p.streaming = true
 	p.UpdateKeys()
-	fmt.Fprintf(p.content, "[::d]  Analyzing...[-:-:-]")
+	fmt.Fprint(p.content, "[::d]Analyzing...[-:-:-]")
 
 	var responseBuf strings.Builder
+	firstChunk := true
 
 	p.analyzer.Analyze(systemPrompt, userPrompt,
 		func(chunk string) {
@@ -218,6 +221,10 @@ func (p *AnalysisPanel) runAI(systemPrompt, userPrompt string) {
 			p.app.QueueUpdateDraw(func() {
 				if !p.active {
 					return
+				}
+				if firstChunk {
+					firstChunk = false
+					fmt.Fprint(p.content, "\n\n")
 				}
 				fmt.Fprint(p.content, chunk)
 				p.content.ScrollToEnd()
@@ -275,7 +282,7 @@ func (p *AnalysisPanel) askFollowUp(question string) {
 	thinLine := "────────────────────────────────────────────────────────────────────────────────"
 	fmt.Fprintf(p.content, "\n\n[#e5c07b]%s[-]\n", thinLine)
 	fmt.Fprintf(p.content, "[bold][#e5c07b]> %s[-]\n", question)
-	fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n\n", thinLine)
+	fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n", thinLine)
 
 	var fullPrompt strings.Builder
 	for _, h := range p.history {

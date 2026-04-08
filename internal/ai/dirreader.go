@@ -6,11 +6,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
-const maxLogFileSize = 1024 * 1024   // 1 MB per file (tail)
+const maxLogFileSize = 1024 * 1024    // 1 MB per file (tail)
 const maxTotalLogContext = 768 * 1024 // 768 KB total for the prompt
 const maxSnippetLines = 300
 
@@ -93,6 +94,128 @@ func ReadLogsFromDir(destDir string) (*DirAnalysis, error) {
 	}
 
 	return result, nil
+}
+
+const maxRemoteFiles = 8
+
+// ReadLogsFromRemote fetches key log files from a Zuul build's log server
+// directly into memory (no disk writes) and returns the same DirAnalysis
+// structure used by the local reader.
+func ReadLogsFromRemote(client *api.Client, build *api.Build, jobOutput []api.PlaybookOutput) (*DirAnalysis, error) {
+	result := &DirAnalysis{}
+
+	if jobOutput != nil {
+		result.JobOutput = jobOutput
+		allStats := mergeStats(jobOutput)
+		result.FailedTasks = api.ExtractFailedTasks(jobOutput, allStats)
+	}
+
+	manifestURL := api.GetManifestURL(build)
+	if manifestURL == "" {
+		return result, nil
+	}
+
+	manifest, err := client.FetchManifest(manifestURL)
+	if err != nil {
+		return result, nil
+	}
+
+	allEntries := api.CollectFiles(manifest.Tree)
+	for _, fe := range allEntries {
+		result.AllFiles = append(result.AllFiles, fe.Path)
+	}
+
+	targets := selectRemoteTargets(allEntries)
+	baseLogURL := strings.TrimRight(build.LogURL, "/")
+
+	type fetchResult struct {
+		path    string
+		content string
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var fetched []fetchResult
+
+	for _, t := range targets {
+		wg.Add(1)
+		go func(fe api.FileEntry) {
+			defer wg.Done()
+			content, err := client.FetchFileContent(baseLogURL+fe.Path, maxLogFileSize)
+			if err != nil || content == "" {
+				return
+			}
+			mu.Lock()
+			fetched = append(fetched, fetchResult{path: fe.Path, content: content})
+			mu.Unlock()
+		}(t)
+	}
+	wg.Wait()
+
+	var totalCtx int
+	for _, fr := range fetched {
+		if totalCtx >= maxTotalLogContext {
+			break
+		}
+		content := StripANSI(fr.content)
+
+		blocks := GrepLogContext(content, 5)
+		if len(blocks) > 0 {
+			result.LogContext = append(result.LogContext, blocks...)
+		}
+
+		snippet := extractRelevantSnippet(content)
+		if snippet != "" && totalCtx+len(snippet) <= maxTotalLogContext {
+			result.LogFiles = append(result.LogFiles, LogFileSnippet{
+				Path:    fr.path,
+				Content: snippet,
+			})
+			totalCtx += len(snippet)
+		}
+	}
+
+	return result, nil
+}
+
+// selectRemoteTargets picks the most important files from a manifest for remote fetch.
+func selectRemoteTargets(entries []api.FileEntry) []api.FileEntry {
+	prioSet := make(map[string]bool, len(priorityFiles))
+	for _, p := range priorityFiles {
+		prioSet[p] = true
+	}
+
+	var prio, rest []api.FileEntry
+	for _, fe := range entries {
+		name := fe.Path[strings.LastIndex(fe.Path, "/")+1:]
+		if name == "job-output.json" {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(name))
+		switch ext {
+		case ".txt", ".log", ".json", ".conf", ".yaml", ".yml", "":
+		default:
+			continue
+		}
+		if fe.Size <= 0 || fe.Size > 20*1024*1024 {
+			continue
+		}
+		if prioSet[name] {
+			prio = append(prio, fe)
+		} else {
+			rest = append(rest, fe)
+		}
+	}
+
+	// Sort rest by size descending (larger files often have more useful info)
+	sort.Slice(rest, func(i, j int) bool {
+		return rest[i].Size > rest[j].Size
+	})
+
+	result := append(prio, rest...)
+	if len(result) > maxRemoteFiles {
+		result = result[:maxRemoteFiles]
+	}
+	return result
 }
 
 func listAllFiles(root string) []string {

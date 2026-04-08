@@ -6,26 +6,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type BuildLogView struct {
-	root        *tview.Flex
-	textView    *tview.TextView
-	header      *tview.TextView
-	separator   *tview.TextView
-	keys        *tview.TextView
-	pathInput   *tview.InputField
-	app         *tview.Application
-	streamer    *api.LogStreamer
-	mu          sync.Mutex
-	stopCh      chan struct{}
-	buildWebURL   string
-	logURL        string
+	root         *tview.Flex
+	textView     *tview.TextView
+	header       *tview.TextView
+	separator    *tview.TextView
+	keys         *tview.TextView
+	pathInput    *tview.InputField
+	app          *tview.Application
+	streamer     *api.LogStreamer
+	mu           sync.Mutex
+	stopCh       chan struct{}
+	buildWebURL  string
+	logURL       string
 	contentFlex  *tview.Flex
 	infoView     *tview.TextView
 	errorsHeader *tview.TextView
@@ -122,13 +122,13 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		errorsHeader: errorsHeader,
 		header:       header,
 		separator:    separator,
-		keys:        keys,
-		pathInput:   pathInput,
-		app:         app,
-		dlManager:   dlManager,
-		pages:       pages,
-		buildLayout: buildLayout,
-		analysis:    panel,
+		keys:         keys,
+		pathInput:    pathInput,
+		app:          app,
+		dlManager:    dlManager,
+		pages:        pages,
+		buildLayout:  buildLayout,
+		analysis:     panel,
 	}
 }
 
@@ -832,7 +832,6 @@ func formatTimestampFull(ts string) string {
 	return ts
 }
 
-
 func resultEmoji(result string) string {
 	switch result {
 	case "SUCCESS":
@@ -847,7 +846,6 @@ func resultEmoji(result string) string {
 		return "[#3884f4]●[-]"
 	}
 }
-
 
 func (v *BuildLogView) startAnalysis() {
 	if v.build == nil {
@@ -869,9 +867,59 @@ func (v *BuildLogView) startAnalysis() {
 
 	v.analysis.WriteClassification(classification, phase)
 
-	systemPrompt := ai.GetSystemPrompt()
-	userPrompt := ai.BuildAnalysisPrompt(v.build, failedTasks, nil)
-	v.analysis.StartAI(systemPrompt, userPrompt)
+	w := v.analysis.Content()
+	fmt.Fprint(w, "  [::d] Fetching remote logs...[-:-:-]")
+
+	client := v.client
+	build := v.build
+
+	go func() {
+		da, _ := ai.ReadLogsFromRemote(client, build, jobOutput)
+
+		v.app.QueueUpdateDraw(func() {
+			if !v.analysis.IsActive() {
+				return
+			}
+
+			var logContext []ai.LogBlock
+			var logFiles []ai.LogFileSnippet
+			var allFiles []string
+
+			if da != nil {
+				logContext = da.LogContext
+				logFiles = da.LogFiles
+				allFiles = da.AllFiles
+				if len(da.FailedTasks) > 0 {
+					failedTasks = da.FailedTasks
+				}
+			}
+
+			if len(logFiles) > 0 {
+				fmt.Fprintf(w, " [bold]%d files fetched[-]\n", len(logFiles))
+			} else {
+				fmt.Fprint(w, " [::d]no remote logs, using task output only[-:-:-]\n")
+			}
+
+			systemPrompt := ai.GetSystemPrompt()
+			userPrompt := ai.BuildAnalysisPrompt(build, failedTasks, logContext)
+			if len(logFiles) > 0 {
+				input := ai.DirAnalysisInput{
+					JobName: build.JobName,
+					Project: build.Ref.Project,
+				}
+				enriched := &ai.DirAnalysis{
+					JobOutput:   jobOutput,
+					FailedTasks: failedTasks,
+					LogContext:  logContext,
+					LogFiles:    logFiles,
+					AllFiles:    allFiles,
+				}
+				userPrompt = ai.BuildDirAnalysisPrompt(input, enriched)
+			}
+
+			v.analysis.StartAI(systemPrompt, userPrompt)
+		})
+	}()
 }
 
 func (v *BuildLogView) Stop() {
