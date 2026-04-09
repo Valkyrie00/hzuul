@@ -160,6 +160,17 @@ func (v *BuildLogView) updateKeys() {
 	}
 }
 
+func (v *BuildLogView) flashKeys(msg string) {
+	v.keys.Clear()
+	_, _ = fmt.Fprint(v.keys, " "+msg)
+	go func() {
+		time.Sleep(2 * time.Second)
+		v.app.QueueUpdateDraw(func() {
+			v.updateKeys()
+		})
+	}()
+}
+
 func (v *BuildLogView) SetBookmarkManager(bm *BookmarkManager) {
 	v.bmManager = bm
 }
@@ -210,16 +221,24 @@ func (v *BuildLogView) SetBackHandler(onBack func()) {
 			onBack()
 			return nil
 		}
-		if event.Rune() == 'o' && v.buildWebURL != "" {
-			openURL(v.buildWebURL)
+		if event.Rune() == 'o' {
+			if v.buildWebURL != "" {
+				openURL(v.buildWebURL)
+			} else {
+				v.flashKeys("[yellow]No web URL available for this build[-]")
+			}
 			return nil
 		}
 		if event.Rune() == 'l' && v.logURL != "" {
 			openURL(v.logURL)
 			return nil
 		}
-		if event.Rune() == 'c' && v.build != nil && v.build.Ref.RefURL != "" {
-			openURL(v.build.Ref.RefURL)
+		if event.Rune() == 'c' {
+			if v.build != nil && v.build.Ref.RefURL != "" {
+				openURL(v.build.Ref.RefURL)
+			} else {
+				v.flashKeys("[yellow]No change URL available for this build[-]")
+			}
 			return nil
 		}
 		if event.Rune() == 's' && v.bmManager != nil && v.build != nil {
@@ -359,7 +378,11 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.mu.Unlock()
 
 	v.logURL = build.LogURL
-	v.buildWebURL = build.LogURL
+	if client != nil && build.UUID != "" {
+		v.buildWebURL = client.StreamURL(build.UUID)
+	} else {
+		v.buildWebURL = build.LogURL
+	}
 	v.client = client
 	v.build = build
 	v.isStatic = false
