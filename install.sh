@@ -6,12 +6,17 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Valkyrie00/hzuul/main/install.sh | bash
 #
+# Optional install directory (default: /usr/local/bin):
+#   INSTALL_DIR=~/bin curl -fsSL ... | bash
+#   curl -fsSL ... | bash -s -- --install-dir "$HOME/.local/bin"
+#
 
 set -e
 
 REPO="Valkyrie00/hzuul"
 BINARY="hzuul"
-INSTALL_DIR="/usr/local/bin"
+DEFAULT_INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -24,6 +29,52 @@ info()    { echo -e "${BLUE}==>${NC} ${BOLD}$1${NC}"; }
 success() { echo -e "${GREEN}==>${NC} ${BOLD}$1${NC}"; }
 warn()    { echo -e "${YELLOW}Warning:${NC} $1"; }
 error()   { echo -e "${RED}Error:${NC} $1" >&2; exit 1; }
+
+usage() {
+    cat <<EOF
+Usage: install.sh [options]
+
+Options:
+  --install-dir DIR   Install binary to DIR (default: ${DEFAULT_INSTALL_DIR})
+  -h, --help          Show this help
+
+Environment:
+  INSTALL_DIR         Same as --install-dir when no CLI path is given
+
+Examples:
+  INSTALL_DIR="\$HOME/.local/bin" bash install.sh
+  curl -fsSL ... | bash -s -- --install-dir "\$HOME/bin"
+EOF
+}
+
+normalize_install_dir() {
+    case "$INSTALL_DIR" in
+        ~|~/*)
+            INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
+            ;;
+    esac
+}
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --install-dir)
+                [ -n "${2:-}" ] || error "--install-dir requires a directory"
+                INSTALL_DIR="$2"
+                shift 2
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                error "Unknown option: $1 (try --help)"
+                ;;
+        esac
+    done
+    INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+    normalize_install_dir
+}
 
 detect_platform() {
     OS="$(uname -s)"
@@ -94,6 +145,9 @@ download_and_install() {
     tar -xzf "${TMPDIR}/${FILENAME}" -C "$TMPDIR"
 
     info "Installing to ${INSTALL_DIR}/${BINARY}..."
+    if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+        sudo mkdir -p "$INSTALL_DIR"
+    fi
     if [ -w "$INSTALL_DIR" ]; then
         mv "${TMPDIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
     else
@@ -105,6 +159,8 @@ download_and_install() {
 }
 
 main() {
+    parse_args "$@"
+
     echo ""
     echo -e "${BLUE}${BOLD}  HZUUL Installer${NC}"
     echo -e "  Terminal UI for Zuul CI/CD"
