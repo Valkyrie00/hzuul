@@ -3,3 +3,4 @@ dist/
 /hzuul
 *.exe
 .DS_Store
+coverage.out

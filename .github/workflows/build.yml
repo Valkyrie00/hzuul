@@ -31,6 +31,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Test
+        run: go test ./... -count=1
+
       - name: Build
         run: go build -ldflags "-s -w" -o /dev/null ./cmd/hzuul
         if: runner.os != 'Windows'
