@@ -109,7 +109,7 @@ func (c *Client) get(path string, params url.Values) (*http.Response, error) {
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("GET %s: %s — %s", path, resp.Status, string(body))
 	}
 
@@ -121,7 +121,7 @@ func (c *Client) getJSON(path string, params url.Values, target any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return json.NewDecoder(resp.Body).Decode(target)
 }
@@ -144,7 +144,7 @@ func (c *Client) postJSON(path string, body any) error {
 	if err != nil {
 		return fmt.Errorf("POST %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -169,7 +169,7 @@ func (c *Client) delete(path string) error {
 	if err != nil {
 		return fmt.Errorf("DELETE %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("DELETE %s: %s", path, resp.Status)
@@ -212,7 +212,7 @@ func (c *Client) RawGet(rawURL string) (*http.Response, error) {
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("GET %s: %s — %s", rawURL, resp.Status, string(body))
 	}
 
@@ -226,7 +226,7 @@ func (c *Client) FetchFileContent(rawURL string, maxBytes int64) (string, error)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var reader io.Reader = resp.Body
 	if maxBytes > 0 {

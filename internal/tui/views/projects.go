@@ -3,10 +3,10 @@ package views
 import (
 	"fmt"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type ProjectsView struct {
@@ -39,7 +39,7 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -57,7 +57,7 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 
 	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
@@ -149,7 +149,7 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 }
 
 func (v *ProjectsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *ProjectsView) Root() tview.Primitive                   { return v.root }
+func (v *ProjectsView) Root() tview.Primitive                  { return v.root }
 
 func (v *ProjectsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
 func (v *ProjectsView) IsLiveFilterable() bool { return true }
@@ -222,7 +222,7 @@ func (v *ProjectsView) showProjectBuilds(p api.Project, header *tview.TextView) 
 	v.buildTable.SetCell(1, 0, tview.NewTableCell(" [::d]Loading...[-:-:-]").SetSelectable(false))
 
 	header.Clear()
-	fmt.Fprintf(header, " [bold]%s[-:-:-]  [::d]recent builds[-:-:-]", p.Name)
+	_, _ = fmt.Fprintf(header, " [bold]%s[-:-:-]  [::d]recent builds[-:-:-]", p.Name)
 
 	v.pages.SwitchToPage("builds")
 	v.page = "builds"

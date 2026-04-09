@@ -26,12 +26,12 @@ import (
 // This matches the behavior of Python's requests_kerberos exactly — it reads
 // the TGT acquired via kinit from the system's credential cache.
 type Kerberos struct {
-	jar             *cookiejar.Jar
-	verifySSL       bool
-	caCert          string
-	accessToken     string
-	hasOIDCSession  bool
-	onProgress      func(string)
+	jar            *cookiejar.Jar
+	verifySSL      bool
+	caCert         string
+	accessToken    string
+	hasOIDCSession bool
+	onProgress     func(string)
 }
 
 // NewKerberos bootstraps a Kerberos session by running curl --negotiate against
@@ -78,8 +78,8 @@ func NewKerberos(targetURL string, verifySSL bool, caCert string, onProgress fun
 	return k, nil
 }
 
-func (k *Kerberos) BearerToken() string    { return k.accessToken }
-func (k *Kerberos) HasOIDCSession() bool   { return k.hasOIDCSession }
+func (k *Kerberos) BearerToken() string  { return k.accessToken }
+func (k *Kerberos) HasOIDCSession() bool { return k.hasOIDCSession }
 
 func (k *Kerberos) HTTPClient(_ *http.Transport) HTTPDoer {
 	tlsCfg := &tls.Config{
@@ -118,8 +118,11 @@ func (k *Kerberos) negotiate(targetURL string) error {
 		return fmt.Errorf("creating temp cookie file: %w", err)
 	}
 	cookiePath := cookieFile.Name()
-	cookieFile.Close()
-	defer os.Remove(cookiePath)
+	if err := cookieFile.Close(); err != nil {
+		_ = os.Remove(cookiePath)
+		return fmt.Errorf("closing temp cookie file: %w", err)
+	}
+	defer func() { _ = os.Remove(cookiePath) }()
 
 	args := []string{
 		"--negotiate", "-u", ":",
@@ -226,8 +229,11 @@ func (k *Kerberos) acquireOIDCSession(targetURL string) error {
 		return fmt.Errorf("creating temp cookie file: %w", err)
 	}
 	cookiePath := cookieFile.Name()
-	cookieFile.Close()
-	defer os.Remove(cookiePath)
+	if err := cookieFile.Close(); err != nil {
+		_ = os.Remove(cookiePath)
+		return fmt.Errorf("closing temp cookie file: %w", err)
+	}
+	defer func() { _ = os.Remove(cookiePath) }()
 
 	args := []string{
 		"--negotiate", "-u", ":",

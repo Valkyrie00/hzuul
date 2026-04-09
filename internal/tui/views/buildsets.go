@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type BuildsetsView struct {
@@ -54,11 +54,11 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 	sep := tview.NewTextView().SetDynamicColors(true)
 	sep.SetBackgroundColor(ColorBg)
 	sep.SetTextColor(ColorSep)
-	fmt.Fprint(sep, "  ──────────────────────────────────────")
+	_, _ = fmt.Fprint(sep, "  ──────────────────────────────────────")
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true)
 	detailKeys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(detailKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(detailKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	detailFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHead, 0, 0, false).
@@ -72,7 +72,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 
 	tableKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	tableKeys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(tableKeys, " [#3884f4]enter[-:-:-][::d]:buildset detail[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(tableKeys, " [#3884f4]enter[-:-:-][::d]:buildset detail[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(tableKeys, 0, 1, false).
@@ -168,7 +168,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 }
 
 func (v *BuildsetsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *BuildsetsView) Root() tview.Primitive                   { return v.root }
+func (v *BuildsetsView) Root() tview.Primitive                  { return v.root }
 
 func (v *BuildsetsView) IsModal() bool { return v.logView.IsAnalysisActive() }
 
@@ -181,7 +181,7 @@ func (v *BuildsetsView) SetFilter(term string) {
 	v.skip = 0
 	v.noMore = false
 	v.countLabel.Clear()
-	fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
+	_, _ = fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
 	v.searchServer()
 }
 
@@ -236,7 +236,7 @@ func (v *BuildsetsView) updateCount() {
 	if !v.noMore {
 		suffix = "+"
 	}
-	fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.buildsets), suffix)
+	_, _ = fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.buildsets), suffix)
 }
 
 func (v *BuildsetsView) loadMore() {
@@ -283,32 +283,32 @@ func (v *BuildsetsView) showDetail(bs api.Buildset) {
 	projStr := buildsetProjects(bs)
 	change := buildsetChange(bs)
 
-	fmt.Fprintf(v.detailHead, " [::b]Buildset Result[-:-:-]\n")
-	fmt.Fprintf(v.detailHead, "\n")
-	fmt.Fprintf(v.detailHead, " [::b]%s[-:-:-] [%s]%s[-]\n", icon, colorHex(rc), bs.Result)
-	fmt.Fprintf(v.detailHead, "\n")
-	fmt.Fprintf(v.detailHead, " [::b]Project:[-:-:-]  %s\n", projStr)
-	fmt.Fprintf(v.detailHead, " [::b]Pipeline:[-:-:-] %s\n", bs.Pipeline)
+	_, _ = fmt.Fprintf(v.detailHead, " [::b]Buildset Result[-:-:-]\n")
+	_, _ = fmt.Fprintf(v.detailHead, "\n")
+	_, _ = fmt.Fprintf(v.detailHead, " [::b]%s[-:-:-] [%s]%s[-]\n", icon, colorHex(rc), bs.Result)
+	_, _ = fmt.Fprintf(v.detailHead, "\n")
+	_, _ = fmt.Fprintf(v.detailHead, " [::b]Project:[-:-:-]  %s\n", projStr)
+	_, _ = fmt.Fprintf(v.detailHead, " [::b]Pipeline:[-:-:-] %s\n", bs.Pipeline)
 	if change != "" {
-		fmt.Fprintf(v.detailHead, " [::b]Change:[-:-:-]   [#3884f4]%s[-]\n", change)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]Change:[-:-:-]   [#3884f4]%s[-]\n", change)
 	}
 	if len(bs.Refs) > 0 && bs.Refs[0].Branch != "" {
-		fmt.Fprintf(v.detailHead, " [::b]Branch:[-:-:-]   %s\n", bs.Refs[0].Branch)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]Branch:[-:-:-]   %s\n", bs.Refs[0].Branch)
 	}
 	if len(bs.Refs) > 0 && bs.Refs[0].Ref != "" {
-		fmt.Fprintf(v.detailHead, " [::b]Ref:[-:-:-]      %s\n", bs.Refs[0].Ref)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]Ref:[-:-:-]      %s\n", bs.Refs[0].Ref)
 	}
 	if bs.EventTimestamp != "" {
-		fmt.Fprintf(v.detailHead, " [::b]Event:[-:-:-]    %s\n", bs.EventTimestamp)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]Event:[-:-:-]    %s\n", bs.EventTimestamp)
 	}
 	if bs.FirstBuildStart != "" {
-		fmt.Fprintf(v.detailHead, " [::b]Start:[-:-:-]    %s\n", bs.FirstBuildStart)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]Start:[-:-:-]    %s\n", bs.FirstBuildStart)
 	}
 	if bs.LastBuildEnd != "" {
-		fmt.Fprintf(v.detailHead, " [::b]End:[-:-:-]      %s\n", bs.LastBuildEnd)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]End:[-:-:-]      %s\n", bs.LastBuildEnd)
 	}
 	if bs.Message != "" {
-		fmt.Fprintf(v.detailHead, " [::b]Message:[-:-:-]  %s\n", bs.Message)
+		_, _ = fmt.Fprintf(v.detailHead, " [::b]Message:[-:-:-]  %s\n", bs.Message)
 	}
 
 	lines := strings.Count(v.detailHead.GetText(true), "\n") + 1

@@ -3,9 +3,9 @@ package views
 import (
 	"fmt"
 
+	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 type NodesView struct {
@@ -25,7 +25,7 @@ func NewNodesView(app *tview.Application) *NodesView {
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -35,7 +35,7 @@ func NewNodesView(app *tview.Application) *NodesView {
 	return &NodesView{root: root, table: table, app: app}
 }
 
-func (v *NodesView) Root() tview.Primitive       { return v.root }
+func (v *NodesView) Root() tview.Primitive  { return v.root }
 func (v *NodesView) IsLiveFilterable() bool { return true }
 
 func (v *NodesView) SetFilter(term string) {

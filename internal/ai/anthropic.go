@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -23,14 +24,14 @@ const (
 // It supports both the direct Anthropic endpoint and Google Vertex AI,
 // which exposes the same API format under a different endpoint + auth.
 type AnthropicProvider struct {
-	endpoint     string
-	authHeader   string
-	authValue    string
-	model        string
-	name         string
-	isVertex     bool
-	vertexCfg    *vertexConfig // non-nil only for Vertex AI, enables token refresh
-	httpClient   *http.Client
+	endpoint   string
+	authHeader string
+	authValue  string
+	model      string
+	name       string
+	isVertex   bool
+	vertexCfg  *vertexConfig // non-nil only for Vertex AI, enables token refresh
+	httpClient *http.Client
 }
 
 type vertexConfig struct {
@@ -82,6 +83,7 @@ func NewVertexAI(cfg config.AIConfig) *AnthropicProvider {
 	}
 	token, err := gcloudAccessToken()
 	if err != nil || token == "" {
+		slog.Debug("vertex AI disabled: no gcloud application-default token", "err", err)
 		return nil
 	}
 	region := cfg.VertexRegion
@@ -162,7 +164,7 @@ func (p *AnthropicProvider) Stream(system, user string, onChunk func(string)) er
 	if err != nil {
 		return fmt.Errorf("API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)

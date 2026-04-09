@@ -4,23 +4,23 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 type AutoholdsView struct {
-	root           *tview.Flex
-	table          *tview.Table
-	pages          *tview.Pages
-	keys           *tview.TextView
-	app            *tview.Application
-	client         *api.Client
-	holds          []api.Autohold
-	filter         string
-	modal          bool
-	deletePending  bool
-	deleteHoldIdx  int
+	root          *tview.Flex
+	table         *tview.Table
+	pages         *tview.Pages
+	keys          *tview.TextView
+	app           *tview.Application
+	client        *api.Client
+	holds         []api.Autohold
+	filter        string
+	modal         bool
+	deletePending bool
+	deleteHoldIdx int
 }
 
 func (v *AutoholdsView) IsModal() bool { return v.modal }
@@ -34,7 +34,7 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 
 	keys := tview.NewTextView().SetDynamicColors(true)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -80,7 +80,7 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 	return v
 }
 
-func (v *AutoholdsView) Root() tview.Primitive       { return v.root }
+func (v *AutoholdsView) Root() tview.Primitive  { return v.root }
 func (v *AutoholdsView) IsLiveFilterable() bool { return true }
 
 func (v *AutoholdsView) SetFilter(term string) {
@@ -197,7 +197,7 @@ func (v *AutoholdsView) showCreateForm() {
 
 		if project == "" || job == "" || reason == "" {
 			statusBar.Clear()
-			fmt.Fprint(statusBar, " [red]Project, Job and Reason are required[-]")
+			_, _ = fmt.Fprint(statusBar, " [red]Project, Job and Reason are required[-]")
 			return
 		}
 
@@ -228,14 +228,14 @@ func (v *AutoholdsView) showCreateForm() {
 		}
 
 		statusBar.Clear()
-		fmt.Fprint(statusBar, " [yellow]Creating autohold request...[-]")
+		_, _ = fmt.Fprint(statusBar, " [yellow]Creating autohold request...[-]")
 
 		go func() {
 			err := v.client.CreateAutohold(project, req)
 			v.app.QueueUpdateDraw(func() {
 				if err != nil {
 					statusBar.Clear()
-					fmt.Fprintf(statusBar, " [red]Error: %v[-]", err)
+					_, _ = fmt.Fprintf(statusBar, " [red]Error: %v[-]", err)
 					return
 				}
 				v.closeForm()
@@ -277,11 +277,11 @@ func (v *AutoholdsView) showCreateForm() {
 
 	header := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	header.SetBackgroundColor(bg)
-	fmt.Fprint(header, " [bold]Create Autohold Request[-]")
+	_, _ = fmt.Fprint(header, " [bold]Create Autohold Request[-]")
 
 	hint := tview.NewTextView().SetDynamicColors(true)
 	hint.SetBackgroundColor(bg)
-	fmt.Fprint(hint, " [#3884f4]tab[-:-:-][::d]:next field[-:-:-]  [#3884f4]shift+tab[-:-:-][::d]:prev field[-:-:-]  [#3884f4]enter[-:-:-][::d]:confirm[-:-:-]  [#3884f4]esc[-:-:-][::d]:cancel[-:-:-]")
+	_, _ = fmt.Fprint(hint, " [#3884f4]tab[-:-:-][::d]:next field[-:-:-]  [#3884f4]shift+tab[-:-:-][::d]:prev field[-:-:-]  [#3884f4]enter[-:-:-][::d]:confirm[-:-:-]  [#3884f4]esc[-:-:-][::d]:cancel[-:-:-]")
 
 	formPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
@@ -322,20 +322,20 @@ func (v *AutoholdsView) confirmDelete() {
 	hold := v.holds[idx]
 
 	v.keys.Clear()
-	fmt.Fprintf(v.keys, " [red::b]Delete[-:-:-] [white]%s[-] [::d](%s)[-:-:-]  [#3884f4]y[-:-:-][::d]:confirm[-:-:-]  [#3884f4]n[-:-:-][::d]:cancel[-:-:-]",
+	_, _ = fmt.Fprintf(v.keys, " [red::b]Delete[-:-:-] [white]%s[-] [::d](%s)[-:-:-]  [#3884f4]y[-:-:-][::d]:confirm[-:-:-]  [#3884f4]n[-:-:-][::d]:cancel[-:-:-]",
 		truncate(hold.Job, 30), hold.ID)
 }
 
 func (v *AutoholdsView) cancelDelete() {
 	v.deletePending = false
 	v.keys.Clear()
-	fmt.Fprint(v.keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(v.keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 }
 
 func (v *AutoholdsView) executeDelete() {
 	hold := v.holds[v.deleteHoldIdx]
 	v.keys.Clear()
-	fmt.Fprint(v.keys, " [yellow::b]Deleting...[-:-:-]")
+	_, _ = fmt.Fprint(v.keys, " [yellow::b]Deleting...[-:-:-]")
 
 	go func() {
 		err := v.client.DeleteAutohold(hold.ID)
@@ -343,7 +343,7 @@ func (v *AutoholdsView) executeDelete() {
 			v.deletePending = false
 			if err != nil {
 				v.keys.Clear()
-				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
 				return
 			}
 			v.cancelDelete()

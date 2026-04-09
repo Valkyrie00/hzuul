@@ -110,10 +110,10 @@ func (c *Client) GetBuild(uuid string) (*Build, error) {
 
 // PlaybookOutput represents one playbook entry from job-output.json.
 type PlaybookOutput struct {
-	Playbook string                    `json:"playbook"`
-	Phase    string                    `json:"phase"`
-	Stats    map[string]HostStats      `json:"stats"`
-	Plays    []PlayOutput              `json:"plays"`
+	Playbook string               `json:"playbook"`
+	Phase    string               `json:"phase"`
+	Stats    map[string]HostStats `json:"stats"`
+	Plays    []PlayOutput         `json:"plays"`
 }
 
 type PlayOutput struct {
@@ -210,7 +210,7 @@ func (c *Client) GetJobOutput(logURL string) ([]PlaybookOutput, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching job-output.json: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -281,17 +281,17 @@ func ExtractFailedTasks(output []PlaybookOutput, stats map[string]HostStats) []F
 }
 
 type Buildset struct {
-	ID                 any          `json:"_id"`
-	UUID               string       `json:"uuid"`
-	Result             string       `json:"result"`
-	Message            string       `json:"message,omitempty"`
-	Pipeline           string       `json:"pipeline"`
-	EventID            string       `json:"event_id,omitempty"`
-	EventTimestamp     string       `json:"event_timestamp,omitempty"`
-	FirstBuildStart    string       `json:"first_build_start_time,omitempty"`
-	LastBuildEnd       string       `json:"last_build_end_time,omitempty"`
-	Refs               []BuildRef   `json:"refs,omitempty"`
-	Builds             []Build      `json:"builds,omitempty"`
+	ID              any        `json:"_id"`
+	UUID            string     `json:"uuid"`
+	Result          string     `json:"result"`
+	Message         string     `json:"message,omitempty"`
+	Pipeline        string     `json:"pipeline"`
+	EventID         string     `json:"event_id,omitempty"`
+	EventTimestamp  string     `json:"event_timestamp,omitempty"`
+	FirstBuildStart string     `json:"first_build_start_time,omitempty"`
+	LastBuildEnd    string     `json:"last_build_end_time,omitempty"`
+	Refs            []BuildRef `json:"refs,omitempty"`
+	Builds          []Build    `json:"builds,omitempty"`
 }
 
 func (c *Client) GetBuildsets(filter *BuildFilter) ([]Buildset, error) {

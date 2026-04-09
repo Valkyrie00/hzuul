@@ -3,9 +3,9 @@ package tui
 import (
 	"fmt"
 
+	"github.com/Valkyrie00/hzuul/internal/tui/views"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/Valkyrie00/hzuul/internal/tui/views"
 )
 
 var tabNames = []string{
@@ -67,12 +67,12 @@ func tabShortcut(i int) string {
 
 func (n *NavBar) render() {
 	n.Clear()
-	fmt.Fprint(n, " ")
+	_, _ = fmt.Fprint(n, " ")
 	for i, name := range tabNames {
 		if i == 9 {
-			fmt.Fprint(n, "  [#78788C]│[-] ")
+			_, _ = fmt.Fprint(n, "  [#78788C]│[-] ")
 		} else if i > 0 {
-			fmt.Fprint(n, "  ")
+			_, _ = fmt.Fprint(n, "  ")
 		}
 		shortcut := tabShortcut(i)
 		badge := ""
@@ -81,15 +81,15 @@ func (n *NavBar) render() {
 		}
 		if i == n.active {
 			if badge != "" {
-				fmt.Fprintf(n, "[yellow::b]%s·%s%s[-::-]", shortcut, name, badge)
+				_, _ = fmt.Fprintf(n, "[yellow::b]%s·%s%s[-::-]", shortcut, name, badge)
 			} else {
-				fmt.Fprintf(n, "[#DCDCE6::b]%s·%s[-::-]", shortcut, name)
+				_, _ = fmt.Fprintf(n, "[#DCDCE6::b]%s·%s[-::-]", shortcut, name)
 			}
 		} else {
 			if badge != "" {
-				fmt.Fprintf(n, "[yellow]%s[-][yellow]·%s%s[-]", shortcut, name, badge)
+				_, _ = fmt.Fprintf(n, "[yellow]%s[-][yellow]·%s%s[-]", shortcut, name, badge)
 			} else {
-				fmt.Fprintf(n, "[#3884F4]%s[-][#78788C]·%s[-]", shortcut, name)
+				_, _ = fmt.Fprintf(n, "[#3884F4]%s[-][#78788C]·%s[-]", shortcut, name)
 			}
 		}
 	}

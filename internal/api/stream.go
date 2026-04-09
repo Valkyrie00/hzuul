@@ -65,7 +65,7 @@ func (c *Client) StreamLog(uuid, logfile string) (*LogStreamer, error) {
 	}
 	msg, _ := json.Marshal(streamRequest{UUID: uuid, Logfile: logfile})
 	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("sending stream request: %w", err)
 	}
 

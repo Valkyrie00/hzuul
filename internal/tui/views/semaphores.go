@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 type SemaphoresView struct {
@@ -26,7 +26,7 @@ func NewSemaphoresView(app *tview.Application) *SemaphoresView {
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -36,7 +36,7 @@ func NewSemaphoresView(app *tview.Application) *SemaphoresView {
 	return &SemaphoresView{root: root, table: table, app: app}
 }
 
-func (v *SemaphoresView) Root() tview.Primitive       { return v.root }
+func (v *SemaphoresView) Root() tview.Primitive  { return v.root }
 func (v *SemaphoresView) IsLiveFilterable() bool { return true }
 
 func (v *SemaphoresView) SetFilter(term string) {

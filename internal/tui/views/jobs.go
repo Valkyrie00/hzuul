@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type JobsView struct {
@@ -17,12 +17,12 @@ type JobsView struct {
 	detailView   *tview.TextView
 	buildTable   *tview.Table
 	logView      *BuildLogView
-	pages      *tview.Pages
-	app        *tview.Application
-	client     *api.Client
-	jobs       []api.Job
-	indexMap    []int
-	filter     string
+	pages        *tview.Pages
+	app          *tview.Application
+	client       *api.Client
+	jobs         []api.Job
+	indexMap     []int
+	filter       string
 
 	buildBuilds []api.Build
 	currentJob  string
@@ -42,7 +42,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:job detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:job detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -60,7 +60,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 		SetTextAlign(tview.AlignLeft)
 	detailSep.SetBackgroundColor(bg)
 	detailSep.SetTextColor(dimColor)
-	fmt.Fprint(detailSep, "  ──────────────────────────────────────")
+	_, _ = fmt.Fprint(detailSep, "  ──────────────────────────────────────")
 
 	detailView := tview.NewTextView().
 		SetDynamicColors(true).
@@ -70,7 +70,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 
 	detailKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	detailKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(detailKeys, " [#3884f4]e[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open source[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	_, _ = fmt.Fprint(detailKeys, " [#3884f4]e[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open source[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	detailPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHeader, 1, 0, false).
@@ -90,7 +90,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 
 	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildKeys.SetBackgroundColor(navBg)
-	fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
@@ -116,10 +116,10 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 		detailHeader: detailHeader,
 		detailView:   detailView,
 		buildTable:   buildTable,
-		logView:    logView,
-		pages:      pages,
-		app:        app,
-		page:       "table",
+		logView:      logView,
+		pages:        pages,
+		app:          app,
+		page:         "table",
 	}
 
 	table.SetSelectedFunc(func(row, _ int) {
@@ -205,7 +205,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 }
 
 func (v *JobsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *JobsView) Root() tview.Primitive                   { return v.root }
+func (v *JobsView) Root() tview.Primitive                  { return v.root }
 
 func (v *JobsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
 func (v *JobsView) IsLiveFilterable() bool { return true }
@@ -385,18 +385,18 @@ func (v *JobsView) showJobDetail(j api.Job) {
 	v.sourceURL = ""
 
 	v.detailHeader.Clear()
-	fmt.Fprintf(v.detailHeader, " [bold]Job Detail[-:-:-] │ [#3884f4]%s[-]", j.Name)
+	_, _ = fmt.Fprintf(v.detailHeader, " [bold]Job Detail[-:-:-] │ [#3884f4]%s[-]", j.Name)
 
 	v.detailView.Clear()
 	if j.Description != "" {
-		fmt.Fprintf(v.detailView, "\n[bold]Description[-:-:-]\n  %s\n", j.Description)
+		_, _ = fmt.Fprintf(v.detailView, "\n[bold]Description[-:-:-]\n  %s\n", j.Description)
 	}
 
 	if len(j.Tags) > 0 {
-		fmt.Fprintf(v.detailView, "\n[bold]Tags[-:-:-]         %s\n", strings.Join(j.Tags, ", "))
+		_, _ = fmt.Fprintf(v.detailView, "\n[bold]Tags[-:-:-]         %s\n", strings.Join(j.Tags, ", "))
 	}
 
-	fmt.Fprintf(v.detailView, "\n[::d]Loading full details...[-:-:-]")
+	_, _ = fmt.Fprintf(v.detailView, "\n[::d]Loading full details...[-:-:-]")
 
 	v.pages.SwitchToPage("detail")
 	v.page = "detail"
@@ -407,24 +407,24 @@ func (v *JobsView) showJobDetail(j api.Job) {
 			v.detailView.Clear()
 
 			if j.Description != "" {
-				fmt.Fprintf(v.detailView, "\n[bold]Description[-:-:-]\n  %s\n", j.Description)
+				_, _ = fmt.Fprintf(v.detailView, "\n[bold]Description[-:-:-]\n  %s\n", j.Description)
 			}
 
 			thickLine := "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 			if err != nil {
-				fmt.Fprintf(v.detailView, "\n[red]Error loading details: %v[-]\n", err)
+				_, _ = fmt.Fprintf(v.detailView, "\n[red]Error loading details: %v[-]\n", err)
 				return
 			}
 
 			if len(details) == 0 {
-				fmt.Fprintf(v.detailView, "\n[yellow]No variant details available[-]\n")
+				_, _ = fmt.Fprintf(v.detailView, "\n[yellow]No variant details available[-]\n")
 				return
 			}
 
 			parentName := ""
 			for vi, variant := range details {
-				fmt.Fprintf(v.detailView, "\n[#3884f4]%s[-]\n", thickLine)
+				_, _ = fmt.Fprintf(v.detailView, "\n[#3884f4]%s[-]\n", thickLine)
 
 				branchLabel := "all branches"
 				if branches, ok := variant["branches"].([]any); ok && len(branches) > 0 {
@@ -434,42 +434,42 @@ func (v *JobsView) showJobDetail(j api.Job) {
 					}
 					branchLabel = strings.Join(parts, ", ")
 				}
-				fmt.Fprintf(v.detailView, "[bold]Variant %d[-:-:-]  [::d](%s)[-:-:-]\n", vi+1, branchLabel)
-				fmt.Fprintf(v.detailView, "[#3884f4]%s[-]\n\n", thickLine)
+				_, _ = fmt.Fprintf(v.detailView, "[bold]Variant %d[-:-:-]  [::d](%s)[-:-:-]\n", vi+1, branchLabel)
+				_, _ = fmt.Fprintf(v.detailView, "[#3884f4]%s[-]\n\n", thickLine)
 
 				if p, ok := variant["parent"].(string); ok && p != "" {
 					if parentName == "" {
 						parentName = p
 					}
-					fmt.Fprintf(v.detailView, "  [bold]Parent[-:-:-]          %s\n", p)
+					_, _ = fmt.Fprintf(v.detailView, "  [bold]Parent[-:-:-]          %s\n", p)
 				}
 				if voting, ok := variant["voting"].(bool); ok {
 					flag := "[green]Voting[-]"
 					if !voting {
 						flag = "[yellow]Non-voting[-]"
 					}
-					fmt.Fprintf(v.detailView, "  [bold]Voting[-:-:-]          %s\n", flag)
+					_, _ = fmt.Fprintf(v.detailView, "  [bold]Voting[-:-:-]          %s\n", flag)
 				}
 				if attempts, ok := variant["attempts"].(float64); ok {
-					fmt.Fprintf(v.detailView, "  [bold]Retry attempts[-:-:-]  %.0f\n", attempts)
+					_, _ = fmt.Fprintf(v.detailView, "  [bold]Retry attempts[-:-:-]  %.0f\n", attempts)
 				}
 				if timeout, ok := variant["timeout"].(float64); ok {
-					fmt.Fprintf(v.detailView, "  [bold]Timeout[-:-:-]         %s\n", formatBuildDuration(timeout))
+					_, _ = fmt.Fprintf(v.detailView, "  [bold]Timeout[-:-:-]         %s\n", formatBuildDuration(timeout))
 				}
 				if nodeset, ok := variant["nodeset"].(map[string]any); ok {
 					if nodes, ok := nodeset["nodes"].([]any); ok && len(nodes) > 0 {
-						fmt.Fprintf(v.detailView, "  [bold]Nodes[-:-:-]           ")
+						_, _ = fmt.Fprintf(v.detailView, "  [bold]Nodes[-:-:-]           ")
 						for ni, n := range nodes {
 							if nm, ok := n.(map[string]any); ok {
 								name, _ := nm["name"].(string)
 								label, _ := nm["label"].(string)
 								if ni > 0 {
-									fmt.Fprint(v.detailView, ", ")
+									_, _ = fmt.Fprint(v.detailView, ", ")
 								}
-								fmt.Fprintf(v.detailView, "%s [::d](%s)[-:-:-]", name, label)
+								_, _ = fmt.Fprintf(v.detailView, "%s [::d](%s)[-:-:-]", name, label)
 							}
 						}
-						fmt.Fprintln(v.detailView)
+						_, _ = fmt.Fprintln(v.detailView)
 					}
 				}
 
@@ -483,7 +483,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 						}
 					}
 					if len(parts) > 0 {
-						fmt.Fprintf(v.detailView, "  [bold]Semaphores[-:-:-]      %s\n", strings.Join(parts, ", "))
+						_, _ = fmt.Fprintf(v.detailView, "  [bold]Semaphores[-:-:-]      %s\n", strings.Join(parts, ", "))
 					}
 				}
 
@@ -499,7 +499,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 						if path != "" {
 							loc += ": " + path
 						}
-						fmt.Fprintf(v.detailView, "  [bold]Defined at[-:-:-]      %s\n", loc)
+						_, _ = fmt.Fprintf(v.detailView, "  [bold]Defined at[-:-:-]      %s\n", loc)
 					}
 					if v.sourceURL == "" {
 						v.sourceURL = buildSourceURL(src, variant)
@@ -507,7 +507,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 				}
 
 				if roles, ok := variant["roles"].([]any); ok && len(roles) > 0 {
-					fmt.Fprintf(v.detailView, "\n  [bold]Roles[-:-:-]\n")
+					_, _ = fmt.Fprintf(v.detailView, "\n  [bold]Roles[-:-:-]\n")
 					for _, r := range roles {
 						if rm, ok := r.(map[string]any); ok {
 							project, _ := rm["project_canonical_name"].(string)
@@ -515,33 +515,32 @@ func (v *JobsView) showJobDetail(j api.Job) {
 								project, _ = rm["project_name"].(string)
 							}
 							if project != "" {
-								fmt.Fprintf(v.detailView, "    [::d]•[-:-:-] %s\n", project)
+								_, _ = fmt.Fprintf(v.detailView, "    [::d]•[-:-:-] %s\n", project)
 							}
 						}
 					}
 				}
 
 				if vars, ok := variant["variables"].(map[string]any); ok && len(vars) > 0 {
-					fmt.Fprintf(v.detailView, "\n  [bold]Variables[-:-:-]  [::d](%d items)[-:-:-]\n", len(vars))
+					_, _ = fmt.Fprintf(v.detailView, "\n  [bold]Variables[-:-:-]  [::d](%d items)[-:-:-]\n", len(vars))
 					count := 0
 					for k, val := range vars {
 						if count >= 15 {
-							fmt.Fprintf(v.detailView, "    [::d]... and %d more[-:-:-]\n", len(vars)-15)
+							_, _ = fmt.Fprintf(v.detailView, "    [::d]... and %d more[-:-:-]\n", len(vars)-15)
 							break
 						}
 						s := formatValue(val)
-						fmt.Fprintf(v.detailView, "    [::d]%s[-:-:-] = %s\n", k, s)
+						_, _ = fmt.Fprintf(v.detailView, "    [::d]%s[-:-:-] = %s\n", k, s)
 						count++
 					}
 				}
 			}
 
-			// Fetch parent chain from the first variant's parent
 			if parentName != "" {
-				fmt.Fprintf(v.detailView, "\n[#3884f4]%s[-]\n", thickLine)
-				fmt.Fprintf(v.detailView, "[bold]Inheritance[-:-:-]\n")
-				fmt.Fprintf(v.detailView, "[#3884f4]%s[-]\n\n", thickLine)
-				fmt.Fprintf(v.detailView, "  [::d]Loading parent chain...[-:-:-]")
+				_, _ = fmt.Fprintf(v.detailView, "\n[#3884f4]%s[-]\n", thickLine)
+				_, _ = fmt.Fprintf(v.detailView, "[bold]Inheritance[-:-:-]\n")
+				_, _ = fmt.Fprintf(v.detailView, "[#3884f4]%s[-]\n\n", thickLine)
+				_, _ = fmt.Fprintf(v.detailView, "  [::d]Loading parent chain...[-:-:-]")
 				go v.fetchParentChain(j.Name, parentName)
 			}
 		})
@@ -568,17 +567,17 @@ func (v *JobsView) fetchParentChain(jobName, firstParent string) {
 		text := v.detailView.GetText(false)
 		text = strings.Replace(text, "  [::d]Loading parent chain...[-:-:-]", "", 1)
 		v.detailView.Clear()
-		fmt.Fprint(v.detailView, text)
+		_, _ = fmt.Fprint(v.detailView, text)
 
 		for i := len(chain) - 1; i >= 0; i-- {
 			depth := len(chain) - 1 - i
 			indent := strings.Repeat("   ", depth)
 			if i == 0 {
-				fmt.Fprintf(v.detailView, "  %s└─ [bold][#3884f4]%s[-][-:-:-]  [::d](current)[-:-:-]\n", indent, chain[i])
+				_, _ = fmt.Fprintf(v.detailView, "  %s└─ [bold][#3884f4]%s[-][-:-:-]  [::d](current)[-:-:-]\n", indent, chain[i])
 			} else if i == len(chain)-1 {
-				fmt.Fprintf(v.detailView, "  %s\n", chain[i])
+				_, _ = fmt.Fprintf(v.detailView, "  %s\n", chain[i])
 			} else {
-				fmt.Fprintf(v.detailView, "  %s└─ %s\n", indent, chain[i])
+				_, _ = fmt.Fprintf(v.detailView, "  %s└─ %s\n", indent, chain[i])
 			}
 		}
 	})
@@ -590,7 +589,7 @@ func (v *JobsView) showJobBuilds(jobName string, header *tview.TextView) {
 	v.buildTable.SetCell(1, 0, tview.NewTableCell(" [::d]Loading...[-:-:-]").SetSelectable(false))
 
 	header.Clear()
-	fmt.Fprintf(header, " [bold]%s[-:-:-]  [::d]recent builds[-:-:-]", jobName)
+	_, _ = fmt.Fprintf(header, " [bold]%s[-:-:-]  [::d]recent builds[-:-:-]", jobName)
 
 	v.pages.SwitchToPage("builds")
 	v.page = "builds"

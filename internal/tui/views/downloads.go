@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type DownloadsView struct {
@@ -122,7 +122,7 @@ func (v *DownloadsView) IsModal() bool { return v.analysis.IsActive() }
 
 func (v *DownloadsView) updateKeys() {
 	v.keys.Clear()
-	fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 }
 
 func (v *DownloadsView) selectedRecord() *DownloadRecord {
@@ -140,7 +140,7 @@ func (v *DownloadsView) startAnalysis(rec *DownloadRecord) {
 	v.pages.SwitchToPage("analysis")
 	v.app.SetFocus(v.analysis.Content())
 
-	fmt.Fprint(v.analysis.Content(), "[::d]  Reading downloaded logs...[-:-:-]\n")
+	_, _ = fmt.Fprint(v.analysis.Content(), "[::d]  Reading downloaded logs...[-:-:-]\n")
 
 	go func() {
 		da, err := ai.ReadLogsFromDir(rec.DestDir)
@@ -149,7 +149,7 @@ func (v *DownloadsView) startAnalysis(rec *DownloadRecord) {
 				return
 			}
 			if err != nil {
-				fmt.Fprintf(v.analysis.Content(), "\n[red]  Error reading logs: %v[-]\n", err)
+				_, _ = fmt.Fprintf(v.analysis.Content(), "\n[red]  Error reading logs: %v[-]\n", err)
 				return
 			}
 			v.showAnalysisResults(rec, da)
@@ -166,7 +166,7 @@ func (v *DownloadsView) showAnalysisResults(rec *DownloadRecord, da *ai.DirAnaly
 	phase := ai.DetermineFailurePhase(pbSummaries)
 
 	v.analysis.WriteClassification(classification, phase)
-	fmt.Fprintf(w, "  [bold]Log files:[-]   %d snippets analyzed\n", len(da.LogFiles))
+	_, _ = fmt.Fprintf(w, "  [bold]Log files:[-]   %d snippets analyzed\n", len(da.LogFiles))
 
 	input := ai.DirAnalysisInput{
 		JobName: rec.JobName,
@@ -259,6 +259,7 @@ func formatDLDate(ts string) string {
 	return t.Format("02 Jan 15:04")
 }
 
+//nolint:unused // kept for future use in download path display
 func truncateRight(s string, max int) string {
 	if len(s) <= max {
 		return s

@@ -13,8 +13,8 @@ type Analyzer struct {
 
 // NewAnalyzer creates an Analyzer by selecting the best available provider
 // based on the config. Provider resolution order for "auto":
-//   1. Vertex AI (Claude via GCP)
-//   2. Anthropic (direct API)
+//  1. Vertex AI (Claude via GCP)
+//  2. Anthropic (direct API)
 //
 // This factory is the only place where providers are wired up.
 // To add a new vendor, implement Provider and add a case here.
@@ -34,10 +34,21 @@ func HasAnalyzer(cfg config.AIConfig) bool {
 // ProviderLabel returns a short label for the active provider, or empty if none.
 func ProviderLabel(cfg config.AIConfig) string {
 	p := resolveProvider(cfg)
-	if p == nil {
-		return ""
+	if p != nil {
+		return p.Name()
 	}
-	return p.Name()
+	// Config points at Vertex but gcloud ADC failed — YAML was still applied.
+	switch strings.ToLower(cfg.Provider) {
+	case "vertex":
+		if cfg.VertexProjectID != "" {
+			return "Vertex (gcloud ADC?)"
+		}
+	case "gemini-vertex":
+		if cfg.VertexProjectID != "" {
+			return "Gemini Vertex (gcloud ADC?)"
+		}
+	}
+	return ""
 }
 
 func resolveProvider(cfg config.AIConfig) Provider {

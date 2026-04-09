@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type statusRow struct {
@@ -59,7 +59,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -192,7 +192,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 }
 
 func (v *StatusView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *StatusView) Root() tview.Primitive                   { return v.root }
+func (v *StatusView) Root() tview.Primitive                  { return v.root }
 
 func (v *StatusView) IsModal() bool          { return v.logView.IsAnalysisActive() }
 func (v *StatusView) IsLiveFilterable() bool { return true }
@@ -489,11 +489,11 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 	if project == "" {
 		project = sr.queue
 	}
-	fmt.Fprintf(v.logView.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ #%s",
+	_, _ = fmt.Fprintf(v.logView.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ #%s",
 		job.Name, project, sr.item.ChangeID())
 
 	v.logView.textView.Clear()
-	fmt.Fprintln(v.logView.textView, "[::d]Loading build detail...[-]")
+	_, _ = fmt.Fprintln(v.logView.textView, "[::d]Loading build detail...[-]")
 	v.pages.SwitchToPage("log")
 
 	go func() {
@@ -501,12 +501,12 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 		v.app.QueueUpdateDraw(func() {
 			if err != nil {
 				v.logView.textView.Clear()
-				fmt.Fprintf(v.logView.textView, "[red]Error loading build: %v[-]\n\n", err)
-				fmt.Fprintf(v.logView.textView, "[bold]Job:[-]       %s\n", job.Name)
-				fmt.Fprintf(v.logView.textView, "[bold]Pipeline:[-]  %s\n", sr.pipeline)
-				fmt.Fprintf(v.logView.textView, "[bold]Change:[-]    #%s\n", sr.item.ChangeID())
+				_, _ = fmt.Fprintf(v.logView.textView, "[red]Error loading build: %v[-]\n\n", err)
+				_, _ = fmt.Fprintf(v.logView.textView, "[bold]Job:[-]       %s\n", job.Name)
+				_, _ = fmt.Fprintf(v.logView.textView, "[bold]Pipeline:[-]  %s\n", sr.pipeline)
+				_, _ = fmt.Fprintf(v.logView.textView, "[bold]Change:[-]    #%s\n", sr.item.ChangeID())
 				if job.ReportURL != "" {
-					fmt.Fprintf(v.logView.textView, "\n[::d]Report: %s[-]\n", job.ReportURL)
+					_, _ = fmt.Fprintf(v.logView.textView, "\n[::d]Report: %s[-]\n", job.ReportURL)
 				}
 				return
 			}
@@ -526,10 +526,10 @@ func (v *StatusView) updateKeys() {
 		changeID := sr.item.ChangeID()
 		switch v.pendingAction {
 		case "dequeue":
-			fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]#%s from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+			_, _ = fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]#%s from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
 				truncate(project, 30), changeID, sr.pipeline)
 		case "promote":
-			fmt.Fprintf(v.keys, " [yellow::b]Promote[-:-:-] [white]#%s[-] [::d]to top of %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+			_, _ = fmt.Fprintf(v.keys, " [yellow::b]Promote[-:-:-] [white]#%s[-] [::d]to top of %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
 				changeID, sr.pipeline)
 		}
 		return
@@ -539,7 +539,7 @@ func (v *StatusView) updateKeys() {
 		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]  [#3884f4]p[-:-:-][::d]:promote[-:-:-]"
 	}
 	base += "  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]"
-	fmt.Fprint(v.keys, base)
+	_, _ = fmt.Fprint(v.keys, base)
 }
 
 func (v *StatusView) confirmDequeue() {
@@ -581,9 +581,9 @@ func (v *StatusView) executeAdminAction() {
 	v.keys.Clear()
 	switch action {
 	case "dequeue":
-		fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+		_, _ = fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
 	case "promote":
-		fmt.Fprint(v.keys, " [yellow::b]Promoting...[-:-:-]")
+		_, _ = fmt.Fprint(v.keys, " [yellow::b]Promoting...[-:-:-]")
 	}
 
 	project := sr.item.ProjectName()
@@ -619,7 +619,7 @@ func (v *StatusView) executeAdminAction() {
 			v.pendingAction = ""
 			if err != nil {
 				v.keys.Clear()
-				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
 				return
 			}
 			v.updateKeys()
@@ -809,4 +809,3 @@ func formatDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dm", m)
 }
-

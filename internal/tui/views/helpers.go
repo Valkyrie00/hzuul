@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 var colorTableHeader = ColorAccent
@@ -167,7 +167,7 @@ func openURL(u string) {
 		cmd = "xdg-open"
 	}
 	args = append(args, u)
-	exec.Command(cmd, args...).Start()
+	_ = exec.Command(cmd, args...).Start()
 }
 
 func handleBuildOpenKeys(event *tcell.EventKey, client *api.Client, build *api.Build) *tcell.EventKey {

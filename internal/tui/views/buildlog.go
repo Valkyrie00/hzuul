@@ -62,7 +62,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		SetTextAlign(tview.AlignLeft)
 	separator.SetBackgroundColor(bg)
 	separator.SetTextColor(dimColor)
-	fmt.Fprint(separator, "  ──────────────────────────────────────")
+	_, _ = fmt.Fprint(separator, "  ──────────────────────────────────────")
 
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
@@ -76,7 +76,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(navBg)
-	fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
 
 	pathInput := tview.NewInputField()
 	pathInput.SetBackgroundColor(navBg)
@@ -139,7 +139,7 @@ func (v *BuildLogView) IsAnalysisActive() bool { return v.analysis.IsActive() }
 func (v *BuildLogView) updateKeys() {
 	v.keys.Clear()
 	if v.dequeuePending && v.build != nil {
-		fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+		_, _ = fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
 			truncate(v.build.JobName, 30), v.build.Pipeline)
 		return
 	}
@@ -149,14 +149,14 @@ func (v *BuildLogView) updateKeys() {
 			base += "  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]"
 		}
 		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
-		fmt.Fprint(v.keys, base)
+		_, _ = fmt.Fprint(v.keys, base)
 	} else {
 		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
 		if v.client != nil && v.client.HasAdminToken() {
 			base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
 		}
 		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
-		fmt.Fprint(v.keys, base)
+		_, _ = fmt.Fprint(v.keys, base)
 	}
 }
 
@@ -250,7 +250,7 @@ func (v *BuildLogView) executeDequeue() {
 		return
 	}
 	v.keys.Clear()
-	fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+	_, _ = fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
 
 	build := v.build
 	go func() {
@@ -268,11 +268,11 @@ func (v *BuildLogView) executeDequeue() {
 			v.dequeuePending = false
 			if err != nil {
 				v.keys.Clear()
-				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
 				return
 			}
 			v.keys.Clear()
-			fmt.Fprint(v.keys, " [green]Dequeued successfully[-]")
+			_, _ = fmt.Fprint(v.keys, " [green]Dequeued successfully[-]")
 		})
 	}()
 }
@@ -284,7 +284,7 @@ func (v *BuildLogView) updateBookmarkHeader(added bool) {
 	if v.isStatic {
 		v.infoView.Clear()
 		for _, line := range v.buildInfoLines() {
-			fmt.Fprintln(v.infoView, line)
+			_, _ = fmt.Fprintln(v.infoView, line)
 		}
 		return
 	}
@@ -295,7 +295,7 @@ func (v *BuildLogView) updateBookmarkHeader(added bool) {
 		bookmark = " [yellow]*BOOKMARKED*[-]"
 	}
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
+	_, _ = fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
 		v.build.JobName, v.build.Ref.Project, v.build.Ref.Branch, bookmark)
 }
 
@@ -383,11 +383,11 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 		bookmark = " [yellow]*BOOKMARKED*[-]"
 	}
 	v.header.Clear()
-	fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
+	_, _ = fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
 		build.JobName, build.Ref.Project, build.Ref.Branch, bookmark)
 
 	v.textView.Clear()
-	fmt.Fprintln(v.textView, "[::d]Connecting to log stream...[-:-:-]")
+	_, _ = fmt.Fprintln(v.textView, "[::d]Connecting to log stream...[-:-:-]")
 
 	v.stopCh = make(chan struct{})
 
@@ -401,7 +401,7 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			v.app.QueueUpdateDraw(func() {
-				fmt.Fprintf(v.textView, "\n[yellow::b]Reconnecting... (attempt %d/%d)[-:-:-]\n", attempt, maxRetries)
+				_, _ = fmt.Fprintf(v.textView, "\n[yellow::b]Reconnecting... (attempt %d/%d)[-:-:-]\n", attempt, maxRetries)
 				v.textView.ScrollToEnd()
 			})
 
@@ -416,8 +416,8 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 		if err != nil {
 			if attempt == maxRetries {
 				v.app.QueueUpdateDraw(func() {
-					fmt.Fprintf(v.textView, "\n[red]Stream error: %v[-]\n", err)
-					fmt.Fprintf(v.textView, "[::d]Log URL: %s[-:-:-]\n", build.LogURL)
+					_, _ = fmt.Fprintf(v.textView, "\n[red]Stream error: %v[-]\n", err)
+					_, _ = fmt.Fprintf(v.textView, "[::d]Log URL: %s[-:-:-]\n", build.LogURL)
 				})
 				return
 			}
@@ -439,7 +439,7 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 		v.mu.Lock()
 		v.streamer = nil
 		v.mu.Unlock()
-		streamer.Close()
+		_ = streamer.Close()
 
 		if !disconnected {
 			return
@@ -447,7 +447,7 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 	}
 
 	v.app.QueueUpdateDraw(func() {
-		fmt.Fprintf(v.textView, "\n[red::b]Stream lost after %d retries[-:-:-]\n", maxRetries)
+		_, _ = fmt.Fprintf(v.textView, "\n[red::b]Stream lost after %d retries[-:-:-]\n", maxRetries)
 		v.textView.ScrollToEnd()
 	})
 }
@@ -486,7 +486,7 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 			if remaining != "" {
 				colored := colorizeLogChunk(remaining)
 				v.app.QueueUpdateDraw(func() {
-					fmt.Fprint(v.textView, colored)
+					_, _ = fmt.Fprint(v.textView, colored)
 					v.textView.ScrollToEnd()
 				})
 			}
@@ -499,7 +499,7 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 			if chunk != "" {
 				colored := colorizeLogChunk(chunk)
 				v.app.QueueUpdateDraw(func() {
-					fmt.Fprint(v.textView, colored)
+					_, _ = fmt.Fprint(v.textView, colored)
 					v.textView.ScrollToEnd()
 				})
 			}
@@ -603,17 +603,17 @@ func (v *BuildLogView) renderBuildDetail(stats map[string]api.HostStats, failed 
 	}
 
 	for _, line := range infoLines {
-		fmt.Fprintln(v.infoView, line)
+		_, _ = fmt.Fprintln(v.infoView, line)
 	}
 	v.contentFlex.AddItem(v.infoView, len(infoLines), 0, false)
 
 	// --- Errors header (fixed) + content (scrollable) ---
 	if len(failed) > 0 {
-		fmt.Fprintf(v.errorsHeader, "\n[red::b]Errors[-:-:-]  [::d](%d)[-:-:-]    [#e5c07b]💡 press [white::b]a[-:-:-][#e5c07b] for AI analysis[-]\n", len(failed))
-		fmt.Fprintf(v.errorsHeader, "[::d]──────────────────────────────────[-:-:-]")
+		_, _ = fmt.Fprintf(v.errorsHeader, "\n[red::b]Errors[-:-:-]  [::d](%d)[-:-:-]    [#e5c07b]💡 press [white::b]a[-:-:-][#e5c07b] for AI analysis[-]\n", len(failed))
+		_, _ = fmt.Fprintf(v.errorsHeader, "[::d]──────────────────────────────────[-:-:-]")
 		v.contentFlex.AddItem(v.errorsHeader, 3, 0, false)
 	} else if stats != nil && len(failed) == 0 {
-		fmt.Fprintf(v.errorsHeader, "\n[::d]✓ No task failures detected[-:-:-]")
+		_, _ = fmt.Fprintf(v.errorsHeader, "\n[::d]✓ No task failures detected[-:-:-]")
 		v.contentFlex.AddItem(v.errorsHeader, 2, 0, false)
 	}
 
@@ -625,9 +625,9 @@ func (v *BuildLogView) renderBuildDetail(stats map[string]api.HostStats, failed 
 			if ft.Msg != "" {
 				taskLine += fmt.Sprintf(" [#e5c07b]return[-] [yellow]%s[-]", ft.Msg)
 			}
-			fmt.Fprintln(w, taskLine)
+			_, _ = fmt.Fprintln(w, taskLine)
 			if ft.Cmd != "" {
-				fmt.Fprintf(w, "     [#e5c07b]cmd[-] [::d]$ %s[-:-:-]\n", truncateCmd(ft.Cmd, 120))
+				_, _ = fmt.Fprintf(w, "     [#e5c07b]cmd[-] [::d]$ %s[-:-:-]\n", truncateCmd(ft.Cmd, 120))
 			}
 
 			output := ft.Stdout
@@ -639,18 +639,18 @@ func (v *BuildLogView) renderBuildDetail(stats map[string]api.HostStats, failed 
 				maxPreview := 15
 				if len(lines) > maxPreview {
 					lines = lines[len(lines)-maxPreview:]
-					fmt.Fprintf(w, "\n     [#e5c07b]output [-][::d](last %d lines)[-:-:-]\n", maxPreview)
+					_, _ = fmt.Fprintf(w, "\n     [#e5c07b]output [-][::d](last %d lines)[-:-:-]\n", maxPreview)
 				} else {
-					fmt.Fprintf(w, "\n     [#e5c07b]output[-:-:-]\n")
+					_, _ = fmt.Fprintf(w, "\n     [#e5c07b]output[-:-:-]\n")
 				}
-				fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", strings.Repeat("═", 72))
+				_, _ = fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", strings.Repeat("═", 72))
 				for _, line := range lines {
 					if len(line) > 120 {
 						line = line[:120] + "…"
 					}
-					fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", line)
+					_, _ = fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", line)
 				}
-				fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", strings.Repeat("═", 72))
+				_, _ = fmt.Fprintf(w, "     [::d]%s[-:-:-]\n", strings.Repeat("═", 72))
 			}
 		}
 	}
@@ -868,7 +868,7 @@ func (v *BuildLogView) startAnalysis() {
 	v.analysis.WriteClassification(classification, phase)
 
 	w := v.analysis.Content()
-	fmt.Fprint(w, "  [::d] Fetching remote logs...[-:-:-]")
+	_, _ = fmt.Fprint(w, "  [::d] Fetching remote logs...[-:-:-]")
 
 	client := v.client
 	build := v.build
@@ -895,9 +895,9 @@ func (v *BuildLogView) startAnalysis() {
 			}
 
 			if len(logFiles) > 0 {
-				fmt.Fprintf(w, " [bold]%d files fetched[-]\n", len(logFiles))
+				_, _ = fmt.Fprintf(w, " [bold]%d files fetched[-]\n", len(logFiles))
 			} else {
-				fmt.Fprint(w, " [::d]no remote logs, using task output only[-:-:-]\n")
+				_, _ = fmt.Fprint(w, " [::d]no remote logs, using task output only[-:-:-]\n")
 			}
 
 			systemPrompt := ai.GetSystemPrompt()
@@ -931,7 +931,7 @@ func (v *BuildLogView) Stop() {
 		v.stopCh = nil
 	}
 	if v.streamer != nil {
-		v.streamer.Close()
+		_ = v.streamer.Close()
 		v.streamer = nil
 	}
 }
