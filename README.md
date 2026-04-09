@@ -4,9 +4,7 @@ Terminal User Interface for [Zuul CI/CD](https://zuul-ci.org/).
 
 Monitor pipelines, browse builds, stream logs, and manage your Zuul instance — all from the terminal.
 
-![Status Dashboard](docs/images/status.png)
-
-![Log Streaming](docs/images/stream-log.png)
+![HZUUL Preview](docs/images/hzuul-preview.gif)
 
 ## Features
 
