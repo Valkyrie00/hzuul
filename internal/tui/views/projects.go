@@ -152,6 +152,8 @@ func (v *ProjectsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBo
 func (v *ProjectsView) Root() tview.Primitive                  { return v.root }
 
 func (v *ProjectsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *ProjectsView) CanReconnect() bool     { return v.logView.CanReconnect() }
+func (v *ProjectsView) Reconnect()             { v.logView.Reconnect() }
 func (v *ProjectsView) IsLiveFilterable() bool { return true }
 
 func (v *ProjectsView) SetFilter(term string) {

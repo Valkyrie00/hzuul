@@ -224,7 +224,9 @@ func (v *BuildsView) executeDequeue() {
 	}()
 }
 
-func (v *BuildsView) IsModal() bool { return v.logView.IsAnalysisActive() }
+func (v *BuildsView) IsModal() bool      { return v.logView.IsAnalysisActive() }
+func (v *BuildsView) CanReconnect() bool { return v.onDetail && v.logView.CanReconnect() }
+func (v *BuildsView) Reconnect()         { v.logView.Reconnect() }
 
 func (v *BuildsView) SetFilter(term string) {
 	v.filter = term

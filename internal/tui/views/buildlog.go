@@ -38,6 +38,7 @@ type BuildLogView struct {
 	isStatic       bool
 	inputActive    bool
 	dequeuePending bool
+	streamDead     bool
 
 	jobOutput   []api.PlaybookOutput
 	failedTasks []api.FailedTask
@@ -136,6 +137,16 @@ func (v *BuildLogView) Root() tview.Primitive { return v.root }
 
 func (v *BuildLogView) IsAnalysisActive() bool { return v.analysis.IsActive() }
 
+func (v *BuildLogView) CanReconnect() bool {
+	return !v.isStatic && v.streamDead && v.client != nil && v.build != nil
+}
+
+func (v *BuildLogView) Reconnect() {
+	if v.CanReconnect() {
+		v.StreamBuild(v.client, v.build)
+	}
+}
+
 func (v *BuildLogView) updateKeys() {
 	v.keys.Clear()
 	if v.dequeuePending && v.build != nil {
@@ -152,6 +163,9 @@ func (v *BuildLogView) updateKeys() {
 		_, _ = fmt.Fprint(v.keys, base)
 	} else {
 		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
+		if v.streamDead {
+			base += "  [yellow]r[-:-:-][::d]:reconnect[-:-:-]"
+		}
 		if v.client != nil && v.client.HasAdminToken() {
 			base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
 		}
@@ -409,6 +423,7 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	_, _ = fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
 		build.JobName, build.Ref.Project, build.Ref.Branch, bookmark)
 
+	v.streamDead = false
 	v.textView.Clear()
 	_, _ = fmt.Fprintln(v.textView, "[::d]Connecting to log stream...[-:-:-]")
 
@@ -470,8 +485,11 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 	}
 
 	v.app.QueueUpdateDraw(func() {
+		v.streamDead = true
 		_, _ = fmt.Fprintf(v.textView, "\n[red::b]Stream lost after %d retries[-:-:-]\n", maxRetries)
+		_, _ = fmt.Fprint(v.textView, "[::d]Press [white::b]r[-:-:-][::d] to reconnect[-:-:-]\n")
 		v.textView.ScrollToEnd()
+		v.updateKeys()
 	})
 }
 

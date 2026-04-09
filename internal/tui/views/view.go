@@ -1,8 +1,8 @@
 package views
 
 import (
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
+	"github.com/rivo/tview"
 )
 
 // View is the interface that all TUI views implement.
@@ -22,6 +22,12 @@ type ModalView interface {
 // and can re-filter instantly on each keystroke without API calls.
 type LiveFilterable interface {
 	IsLiveFilterable() bool
+}
+
+// Reconnectable is implemented by views that can reconnect a dead stream.
+type Reconnectable interface {
+	CanReconnect() bool
+	Reconnect()
 }
 
 // BookmarkAwareView can be implemented by views that contain a BuildLogView

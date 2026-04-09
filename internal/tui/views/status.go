@@ -44,6 +44,7 @@ type StatusView struct {
 	filter             string
 	pendingAction      string // "" | "dequeue" | "promote"
 	pendingRowIdx      int
+	onLog              bool
 }
 
 func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *StatusView {
@@ -185,6 +186,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 	})
 
 	logView.SetBackHandler(func() {
+		v.onLog = false
 		v.pages.SwitchToPage("table")
 	})
 
@@ -196,6 +198,8 @@ func (v *StatusView) Root() tview.Primitive                  { return v.root }
 
 func (v *StatusView) IsModal() bool          { return v.logView.IsAnalysisActive() }
 func (v *StatusView) IsLiveFilterable() bool { return true }
+func (v *StatusView) CanReconnect() bool     { return v.onLog && v.logView.CanReconnect() }
+func (v *StatusView) Reconnect()             { v.logView.Reconnect() }
 
 func (v *StatusView) SetFilter(term string) {
 	v.filter = term
@@ -478,6 +482,7 @@ func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 			RefURL:  sr.item.ChangeURL(),
 		},
 	}
+	v.onLog = true
 	v.logView.StreamBuild(v.client, build)
 	v.pages.SwitchToPage("log")
 }
@@ -492,6 +497,7 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 	_, _ = fmt.Fprintf(v.logView.header, " [bold]Build Detail[-] │ [#3884f4]%s[-] │ %s │ #%s",
 		job.Name, project, sr.item.ChangeID())
 
+	v.onLog = true
 	v.logView.textView.Clear()
 	_, _ = fmt.Fprintln(v.logView.textView, "[::d]Loading build detail...[-]")
 	v.pages.SwitchToPage("log")

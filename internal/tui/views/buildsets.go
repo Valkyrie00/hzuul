@@ -170,7 +170,9 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 func (v *BuildsetsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
 func (v *BuildsetsView) Root() tview.Primitive                  { return v.root }
 
-func (v *BuildsetsView) IsModal() bool { return v.logView.IsAnalysisActive() }
+func (v *BuildsetsView) IsModal() bool      { return v.logView.IsAnalysisActive() }
+func (v *BuildsetsView) CanReconnect() bool { return v.logView.CanReconnect() }
+func (v *BuildsetsView) Reconnect()         { v.logView.Reconnect() }
 
 func (v *BuildsetsView) SetFilter(term string) {
 	v.filter = term
