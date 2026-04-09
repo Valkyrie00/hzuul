@@ -3,19 +3,19 @@ package views
 import (
 	"fmt"
 
+	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
 type LabelsView struct {
-	root      *tview.Flex
-	table     *tview.Table
-	app       *tview.Application
-	client    *api.Client
-	labels    []api.Label
+	root       *tview.Flex
+	table      *tview.Table
+	app        *tview.Application
+	client     *api.Client
+	labels     []api.Label
 	nodeCounts map[string]int
-	filter    string
+	filter     string
 }
 
 func NewLabelsView(app *tview.Application) *LabelsView {
@@ -27,7 +27,7 @@ func NewLabelsView(app *tview.Application) *LabelsView {
 
 	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	keys.SetBackgroundColor(ColorNavBg)
-	fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
@@ -37,7 +37,7 @@ func NewLabelsView(app *tview.Application) *LabelsView {
 	return &LabelsView{root: root, table: table, app: app}
 }
 
-func (v *LabelsView) Root() tview.Primitive       { return v.root }
+func (v *LabelsView) Root() tview.Primitive  { return v.root }
 func (v *LabelsView) IsLiveFilterable() bool { return true }
 
 func (v *LabelsView) SetFilter(term string) {

@@ -3,31 +3,31 @@ package views
 import (
 	"fmt"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type BuildsView struct {
-	root       *tview.Flex
-	table      *tview.Table
-	keys       *tview.TextView
-	countLabel *tview.TextView
-	dlLabel    *tview.TextView
-	logView    *BuildLogView
-	dlManager  *DownloadManager
-	pages      *tview.Pages
-	app        *tview.Application
-	client     *api.Client
-	builds     []api.Build
-	indexMap    []int
-	filter     string
-	curFilter  api.BuildFilter
-	skip       int
-	loading    bool
-	noMore     bool
-	onDetail   bool
+	root            *tview.Flex
+	table           *tview.Table
+	keys            *tview.TextView
+	countLabel      *tview.TextView
+	dlLabel         *tview.TextView
+	logView         *BuildLogView
+	dlManager       *DownloadManager
+	pages           *tview.Pages
+	app             *tview.Application
+	client          *api.Client
+	builds          []api.Build
+	indexMap        []int
+	filter          string
+	curFilter       api.BuildFilter
+	skip            int
+	loading         bool
+	noMore          bool
+	onDetail        bool
 	dequeuePending  bool
 	dequeueBuildIdx int
 }
@@ -152,20 +152,20 @@ func (v *BuildsView) updateDLLabel() {
 			if r.TotalFiles > 0 {
 				pct = r.DoneFiles * 100 / r.TotalFiles
 			}
-			fmt.Fprintf(v.dlLabel, "[yellow::b]↓[-:-:-][::d] %d%% (%d/%d)[-:-:-] ", pct, r.DoneFiles, r.TotalFiles)
+			_, _ = fmt.Fprintf(v.dlLabel, "[yellow::b]↓[-:-:-][::d] %d%% (%d/%d)[-:-:-] ", pct, r.DoneFiles, r.TotalFiles)
 			return
 		}
 	}
 }
 
 func (v *BuildsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *BuildsView) Root() tview.Primitive                   { return v.root }
+func (v *BuildsView) Root() tview.Primitive                  { return v.root }
 
 func (v *BuildsView) updateBuildsKeys() {
 	v.keys.Clear()
 	if v.dequeuePending {
 		b := v.builds[v.dequeueBuildIdx]
-		fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+		_, _ = fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
 			truncate(b.JobName, 30), b.Pipeline)
 		return
 	}
@@ -174,7 +174,7 @@ func (v *BuildsView) updateBuildsKeys() {
 		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
 	}
 	base += "  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]"
-	fmt.Fprint(v.keys, base)
+	_, _ = fmt.Fprint(v.keys, base)
 }
 
 func (v *BuildsView) confirmDequeue(buildIdx int) {
@@ -198,7 +198,7 @@ func (v *BuildsView) cancelDequeue() {
 func (v *BuildsView) executeDequeue() {
 	b := v.builds[v.dequeueBuildIdx]
 	v.keys.Clear()
-	fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+	_, _ = fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
 
 	go func() {
 		req := &api.DequeueRequest{
@@ -215,7 +215,7 @@ func (v *BuildsView) executeDequeue() {
 			v.dequeuePending = false
 			if err != nil {
 				v.keys.Clear()
-				fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
 				return
 			}
 			v.updateBuildsKeys()
@@ -235,7 +235,7 @@ func (v *BuildsView) SetFilter(term string) {
 	v.skip = 0
 	v.noMore = false
 	v.countLabel.Clear()
-	fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
+	_, _ = fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
 	v.searchServer()
 }
 
@@ -299,7 +299,7 @@ func (v *BuildsView) updateCount() {
 	if !v.noMore {
 		suffix = "+"
 	}
-	fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.builds), suffix)
+	_, _ = fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.builds), suffix)
 }
 
 func (v *BuildsView) loadMore() {

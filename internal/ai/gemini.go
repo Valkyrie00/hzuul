@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -13,8 +14,8 @@ import (
 )
 
 const (
-	defaultGeminiModel    = "gemini-2.5-pro"
-	geminiStudioEndpoint  = "https://generativelanguage.googleapis.com/v1beta/models"
+	defaultGeminiModel   = "gemini-2.5-pro"
+	geminiStudioEndpoint = "https://generativelanguage.googleapis.com/v1beta/models"
 )
 
 // GeminiProvider implements Provider for Google's Gemini API.
@@ -31,9 +32,9 @@ type GeminiProvider struct {
 }
 
 type geminiRequest struct {
-	Contents         []geminiContent  `json:"contents"`
+	Contents          []geminiContent `json:"contents"`
 	SystemInstruction *geminiContent  `json:"systemInstruction,omitempty"`
-	GenerationConfig geminiGenConfig  `json:"generationConfig"`
+	GenerationConfig  geminiGenConfig `json:"generationConfig"`
 }
 
 type geminiContent struct {
@@ -91,6 +92,7 @@ func NewGeminiVertex(cfg config.AIConfig) *GeminiProvider {
 	}
 	token, err := gcloudAccessToken()
 	if err != nil || token == "" {
+		slog.Debug("gemini vertex disabled: no gcloud application-default token", "err", err)
 		return nil
 	}
 	region := cfg.VertexRegion
@@ -166,11 +168,11 @@ func (p *GeminiProvider) Stream(system, user string, onChunk func(string)) error
 	if err != nil {
 		return fmt.Errorf("API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Gemini API error %d: %s", resp.StatusCode, formatAPIError(resp.StatusCode, string(respBody), p.model))
+		return fmt.Errorf("gemini API error %d: %s", resp.StatusCode, formatAPIError(resp.StatusCode, string(respBody), p.model))
 	}
 
 	return parseGeminiSSE(resp.Body, onChunk)
@@ -204,4 +206,3 @@ func parseGeminiSSE(r io.Reader, onChunk func(string)) error {
 	}
 	return scanner.Err()
 }
-

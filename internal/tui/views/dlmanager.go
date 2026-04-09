@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
+	"github.com/rivo/tview"
 )
 
 type DLStatus string
@@ -168,7 +168,7 @@ func (dm *DownloadManager) Cancel(uuid string) {
 	dm.mu.Unlock()
 
 	if destDir != "" {
-		go os.RemoveAll(destDir)
+		go func() { _ = os.RemoveAll(destDir) }()
 	}
 }
 
@@ -186,7 +186,7 @@ func (dm *DownloadManager) Remove(uuid string) {
 	dm.mu.Unlock()
 
 	if destDir != "" {
-		go os.RemoveAll(destDir)
+		go func() { _ = os.RemoveAll(destDir) }()
 	}
 	dm.saveHistory()
 	dm.notify()

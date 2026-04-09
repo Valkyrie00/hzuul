@@ -15,18 +15,18 @@ type Config struct {
 }
 
 type AIConfig struct {
-	Provider        string `yaml:"provider,omitempty"`         // "vertex", "anthropic", "gemini", "gemini-vertex", or "auto" (default)
-	Model           string `yaml:"model,omitempty"`            // model override
+	Provider        string `yaml:"provider,omitempty"` // "vertex", "anthropic", "gemini", "gemini-vertex", or "auto" (default)
+	Model           string `yaml:"model,omitempty"`    // model override
 	AnthropicAPIKey string `yaml:"anthropic_api_key,omitempty"`
 	GeminiAPIKey    string `yaml:"gemini_api_key,omitempty"`
 	VertexProjectID string `yaml:"vertex_project_id,omitempty"`
-	VertexRegion    string `yaml:"vertex_region,omitempty"`    // default: us-east5
+	VertexRegion    string `yaml:"vertex_region,omitempty"` // default: us-east5
 }
 
 type Context struct {
 	URL       string `yaml:"url"`
 	Tenant    string `yaml:"tenant"`
-	Auth      string `yaml:"auth"`                // "kerberos" or "none"
+	Auth      string `yaml:"auth"` // "kerberos" or "none"
 	VerifySSL *bool  `yaml:"verify_ssl,omitempty"`
 	CACert    string `yaml:"ca_cert,omitempty"` // path to CA bundle (e.g. tls-ca-bundle.pem)
 }
@@ -113,8 +113,8 @@ func (c *Config) SaveWithDefaults(path string) error {
 		if err != nil {
 			return nil
 		}
-		defer f.Close()
-		f.WriteString(aiConfigComment)
+		defer func() { _ = f.Close() }()
+		_, _ = f.WriteString(aiConfigComment)
 	}
 	return nil
 }

@@ -52,7 +52,7 @@ func (c *Client) FetchManifest(manifestURL string) (*ManifestTree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching manifest: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tree ManifestTree
 	if err := json.NewDecoder(resp.Body).Decode(&tree); err != nil {
@@ -167,13 +167,13 @@ func (c *Client) downloadFile(fileURL, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	f, err := os.Create(destPath)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, err = io.Copy(f, resp.Body)
 	return err

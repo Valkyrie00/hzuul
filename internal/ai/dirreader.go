@@ -220,7 +220,7 @@ func selectRemoteTargets(entries []api.FileEntry) []api.FileEntry {
 
 func listAllFiles(root string) []string {
 	var files []string
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -235,7 +235,7 @@ func listAllFiles(root string) []string {
 
 func findFile(root, name string) string {
 	var found string
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || found != "" {
 			return filepath.SkipDir
 		}
@@ -250,7 +250,7 @@ func findFile(root, name string) string {
 
 func collectLogFiles(root string) []string {
 	var files []string
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}

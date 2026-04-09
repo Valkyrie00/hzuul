@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 	"github.com/Valkyrie00/hzuul/internal/ai"
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
 	"github.com/Valkyrie00/hzuul/internal/tui/views"
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 const defaultRefreshInterval = 30 * time.Second
@@ -26,7 +26,7 @@ type App struct {
 	filterText      string
 	filterPos       int
 	filterOpen      bool
-	filterTimer     *time.Timer
+	filterTimer     *time.Timer //nolint:unused // used by scheduleFilter
 	quitPending     bool
 	client          *api.Client
 	cfg             *config.Config
@@ -112,7 +112,7 @@ func (a *App) initClient(ctx *config.Context, loadingText *tview.TextView) {
 	setStatus := func(msg string) {
 		a.app.QueueUpdateDraw(func() {
 			loadingText.Clear()
-			fmt.Fprintf(loadingText, "\n\n\n [yellow]%s[-]", msg)
+			_, _ = fmt.Fprintf(loadingText, "\n\n\n [yellow]%s[-]", msg)
 		})
 	}
 
@@ -120,7 +120,7 @@ func (a *App) initClient(ctx *config.Context, loadingText *tview.TextView) {
 	if err != nil {
 		a.app.QueueUpdateDraw(func() {
 			loadingText.Clear()
-			fmt.Fprintf(loadingText, "\n\n\n [red::b]Error:[-:-:-] %v\n\n [::d]Press q to quit[-:-:-]", err)
+			_, _ = fmt.Fprintf(loadingText, "\n\n\n [red::b]Error:[-:-:-] %v\n\n [::d]Press q to quit[-:-:-]", err)
 		})
 		return
 	}
@@ -142,10 +142,14 @@ func (a *App) Run() error {
 
 func (a *App) aiLabel() string {
 	label := ai.ProviderLabel(a.cfg.AI)
-	if label != "" {
-		return fmt.Sprintf("[::d]│[-:-:-] [::d]ai:[-:-:-] [green]%s[-:-:-]", label)
+	if label == "" {
+		return "[::d]│[-:-:-] [::d]ai:[-:-:-] [red]not configured[-:-:-]"
 	}
-	return "[::d]│[-:-:-] [::d]ai:[-:-:-] [red]not configured[-:-:-]"
+	color := "green"
+	if !ai.HasAnalyzer(a.cfg.AI) {
+		color = "yellow"
+	}
+	return fmt.Sprintf("[::d]│[-:-:-] [::d]ai:[-:-:-] [%s]%s[-:-:-]", color, label)
 }
 
 func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
@@ -153,7 +157,7 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	tv.SetBackgroundColor(views.ColorHeaderBg)
-	fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
+	_, _ = fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
 		strings.ToUpper(a.version), ctx.URL, ctx.Tenant, a.cfg.CurrentContext, a.aiLabel())
 	return tv
 }
@@ -184,7 +188,7 @@ const footerKeysBase = " [#3884f4]?[-:-:-][::d]:help[-:-:-]  [#3884f4]t[-:-:-][:
 func (a *App) updateFooterKeysText() {
 	a.footerKeys.Clear()
 	if a.quitPending {
-		fmt.Fprint(a.footerKeys, " [yellow::b]Quit HZUUL?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]")
+		_, _ = fmt.Fprint(a.footerKeys, " [yellow::b]Quit HZUUL?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]")
 		return
 	}
 	if a.filterOpen {
@@ -196,14 +200,15 @@ func (a *App) updateFooterKeysText() {
 			cursor = string(runes[a.filterPos])
 			after = string(runes[a.filterPos+1:])
 		}
-		fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after)
+		_, _ = fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after)
 	} else if a.filterText != "" {
-		fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
+		_, _ = fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
 	} else {
-		fmt.Fprint(a.footerKeys, footerKeysBase)
+		_, _ = fmt.Fprint(a.footerKeys, footerKeysBase)
 	}
 }
 
+//nolint:unused // used by scheduleFilter
 func (a *App) cancelFilterTimer() {
 	if a.filterTimer != nil {
 		a.filterTimer.Stop()
@@ -211,6 +216,7 @@ func (a *App) cancelFilterTimer() {
 	}
 }
 
+//nolint:unused // reserved for future live-filter debouncing
 func (a *App) scheduleFilter() {
 	a.cancelFilterTimer()
 	a.filterTimer = time.AfterFunc(500*time.Millisecond, func() {
@@ -260,7 +266,6 @@ func (a *App) switchView(index int) {
 	if index < 0 || index >= len(tabNames) || a.client == nil {
 		return
 	}
-	a.cancelFilterTimer()
 	old := a.nav.Active()
 	if old >= 0 && old < len(a.views) {
 		a.views[old].SetFilter("")
@@ -298,7 +303,7 @@ func (a *App) autoRefresh() {
 
 func (a *App) updateFooterTime() {
 	a.footerTime.Clear()
-	fmt.Fprintf(a.footerTime, "[::d]last update: %s [-:-:-]", time.Now().Format("15:04:05"))
+	_, _ = fmt.Fprintf(a.footerTime, "[::d]last update: %s [-:-:-]", time.Now().Format("15:04:05"))
 }
 
 func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
@@ -328,7 +333,6 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		runes := []rune(a.filterText)
 		switch event.Key() {
 		case tcell.KeyEsc:
-			a.cancelFilterTimer()
 			a.filterOpen = false
 			a.filterText = ""
 			a.filterPos = 0
@@ -336,7 +340,6 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 			a.updateFooterKeysText()
 			return nil
 		case tcell.KeyEnter:
-			a.cancelFilterTimer()
 			a.filterOpen = false
 			a.applyFilter()
 			a.updateFooterKeysText()
@@ -506,10 +509,10 @@ func (a *App) showTenantPicker() {
 					list.SetCurrentItem(i)
 				}
 				list.AddItem(prefix+name, "", 0, func() {
-				a.client.SetTenant(name)
-				a.header.Clear()
-				ctx, _ := a.cfg.Active()
-				fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
+					a.client.SetTenant(name)
+					a.header.Clear()
+					ctx, _ := a.cfg.Active()
+					_, _ = fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
 						strings.ToUpper(a.version), ctx.URL, name, a.cfg.CurrentContext, a.aiLabel())
 					a.dismissModal("tenants")
 					idx := a.nav.Active()

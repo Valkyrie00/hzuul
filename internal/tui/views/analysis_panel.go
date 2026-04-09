@@ -51,7 +51,7 @@ func NewAnalysisPanel(app *tview.Application, aiCfg config.AIConfig) *AnalysisPa
 		SetTextAlign(tview.AlignLeft)
 	separator.SetBackgroundColor(bg)
 	separator.SetTextColor(ColorSep)
-	fmt.Fprint(separator, "  ──────────────────────────────────────")
+	_, _ = fmt.Fprint(separator, "  ──────────────────────────────────────")
 
 	content := tview.NewTextView().
 		SetDynamicColors(true).
@@ -127,7 +127,7 @@ func (p *AnalysisPanel) UpdateKeys() {
 		base += "  [#e5c07b]a[-:-:-][::d]:ask[-:-:-]"
 	}
 	base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
-	fmt.Fprint(p.keys, base)
+	_, _ = fmt.Fprint(p.keys, base)
 
 	if p.onKeysChanged != nil {
 		p.onKeysChanged()
@@ -145,7 +145,7 @@ func (p *AnalysisPanel) Start(mode AnalysisMode, jobName, project string) {
 	if mode == AnalysisFull {
 		modeLabel = "Full Analysis"
 	}
-	fmt.Fprintf(p.header, " [bold][#e5c07b]%s[-] │ [#3884f4]%s[-] │ %s", modeLabel, jobName, project)
+	_, _ = fmt.Fprintf(p.header, " [bold][#e5c07b]%s[-] │ [#3884f4]%s[-] │ %s", modeLabel, jobName, project)
 
 	p.content.Clear()
 	p.content.ScrollToBeginning()
@@ -164,25 +164,25 @@ func (p *AnalysisPanel) WriteClassification(classification ai.Classification, ph
 		}
 		parts = append(parts, reason)
 	}
-	fmt.Fprintf(p.content, "[#e5c07b]⚡[-] %s\n", strings.Join(parts, " · "))
+	_, _ = fmt.Fprintf(p.content, "[#e5c07b]⚡[-] %s\n", strings.Join(parts, " · "))
 }
 
 func (p *AnalysisPanel) WriteNoAI() {
 	w := p.content
-	fmt.Fprintf(w, "\n[#e5c07b]  ──────────────────────────────────────[-]\n\n")
-	fmt.Fprintf(w, "  [bold]AI Analysis not configured[-]\n\n")
-	fmt.Fprintf(w, "  [::d]Enable AI-powered deep analysis by adding to [white]~/.hzuul/config.yaml[-:-:-][::d]:[-:-:-]\n\n")
-	fmt.Fprintf(w, "  [::d]  # Anthropic API (direct)[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]  ai:[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]    provider: anthropic[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]    anthropic_api_key: sk-ant-...[-:-:-]\n\n")
-	fmt.Fprintf(w, "  [::d]  # Google Vertex AI (Claude via GCP)[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]  ai:[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]    provider: vertex[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]    vertex_project_id: my-project[-:-:-]\n")
-	fmt.Fprintf(w, "  [::d]    vertex_region: us-east5[-:-:-]\n\n")
-	fmt.Fprintf(w, "  [::d]  ... and more (Gemini, Gemini Vertex AI, etc.)[-:-:-]\n\n")
-	fmt.Fprintf(w, "  [::d]See the HZUUL README for all supported providers and setup details.[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "\n[#e5c07b]  ──────────────────────────────────────[-]\n\n")
+	_, _ = fmt.Fprintf(w, "  [bold]AI Analysis not configured[-]\n\n")
+	_, _ = fmt.Fprintf(w, "  [::d]Enable AI-powered deep analysis by adding to [white]~/.hzuul/config.yaml[-:-:-][::d]:[-:-:-]\n\n")
+	_, _ = fmt.Fprintf(w, "  [::d]  # Anthropic API (direct)[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]  ai:[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]    provider: anthropic[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]    anthropic_api_key: sk-ant-...[-:-:-]\n\n")
+	_, _ = fmt.Fprintf(w, "  [::d]  # Google Vertex AI (Claude via GCP)[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]  ai:[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]    provider: vertex[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]    vertex_project_id: my-project[-:-:-]\n")
+	_, _ = fmt.Fprintf(w, "  [::d]    vertex_region: us-east5[-:-:-]\n\n")
+	_, _ = fmt.Fprintf(w, "  [::d]  ... and more (Gemini, Gemini Vertex AI, etc.)[-:-:-]\n\n")
+	_, _ = fmt.Fprintf(w, "  [::d]See the HZUUL README for all supported providers and setup details.[-:-:-]\n")
 }
 
 func (p *AnalysisPanel) StartAI(systemPrompt, userPrompt string) {
@@ -198,19 +198,19 @@ func (p *AnalysisPanel) StartAI(systemPrompt, userPrompt string) {
 
 func (p *AnalysisPanel) writeAIHeader() {
 	thickLine := "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	fmt.Fprintf(p.content, "\n[#e5c07b]%s[-]\n", thickLine)
-	fmt.Fprintf(p.content, "[bold][#e5c07b]AI Analysis[-] [#e5c07b](%s · %s)[-]", p.analyzer.ProviderName(), p.analyzer.ModelName())
+	_, _ = fmt.Fprintf(p.content, "\n[#e5c07b]%s[-]\n", thickLine)
+	_, _ = fmt.Fprintf(p.content, "[bold][#e5c07b]AI Analysis[-] [#e5c07b](%s · %s)[-]", p.analyzer.ProviderName(), p.analyzer.ModelName())
 	if p.mode == AnalysisBasic {
-		fmt.Fprintf(p.content, " [::d]— download logs for full analysis[-:-:-]")
+		_, _ = fmt.Fprintf(p.content, " [::d]— download logs for full analysis[-:-:-]")
 	}
-	fmt.Fprint(p.content, "\n")
-	fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n", thickLine)
+	_, _ = fmt.Fprint(p.content, "\n")
+	_, _ = fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n", thickLine)
 }
 
 func (p *AnalysisPanel) runAI(systemPrompt, userPrompt string) {
 	p.streaming = true
 	p.UpdateKeys()
-	fmt.Fprint(p.content, "[::d]Analyzing...[-:-:-]")
+	_, _ = fmt.Fprint(p.content, "[::d]Analyzing...[-:-:-]")
 
 	var responseBuf strings.Builder
 	firstChunk := true
@@ -224,9 +224,9 @@ func (p *AnalysisPanel) runAI(systemPrompt, userPrompt string) {
 				}
 				if firstChunk {
 					firstChunk = false
-					fmt.Fprint(p.content, "\n\n")
+					_, _ = fmt.Fprint(p.content, "\n\n")
 				}
-				fmt.Fprint(p.content, chunk)
+				_, _ = fmt.Fprint(p.content, chunk)
 				p.content.ScrollToEnd()
 			})
 		},
@@ -237,10 +237,10 @@ func (p *AnalysisPanel) runAI(systemPrompt, userPrompt string) {
 					return
 				}
 				if err != nil {
-					fmt.Fprintf(p.content, "\n\n[red]  Error: %v[-]\n", err)
+					_, _ = fmt.Fprintf(p.content, "\n\n[red]  Error: %v[-]\n", err)
 				} else {
 					p.history = append(p.history, "Assistant: "+responseBuf.String())
-					fmt.Fprint(p.content, "\n")
+					_, _ = fmt.Fprint(p.content, "\n")
 				}
 				p.UpdateKeys()
 			})
@@ -280,15 +280,15 @@ func (p *AnalysisPanel) hideInput() {
 
 func (p *AnalysisPanel) askFollowUp(question string) {
 	thinLine := "────────────────────────────────────────────────────────────────────────────────"
-	fmt.Fprintf(p.content, "\n\n[#e5c07b]%s[-]\n", thinLine)
-	fmt.Fprintf(p.content, "[bold][#e5c07b]> %s[-]\n", question)
-	fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n", thinLine)
+	_, _ = fmt.Fprintf(p.content, "\n\n[#e5c07b]%s[-]\n", thinLine)
+	_, _ = fmt.Fprintf(p.content, "[bold][#e5c07b]> %s[-]\n", question)
+	_, _ = fmt.Fprintf(p.content, "[#e5c07b]%s[-]\n", thinLine)
 
 	var fullPrompt strings.Builder
 	for _, h := range p.history {
-		fmt.Fprintf(&fullPrompt, "%s\n\n", h)
+		_, _ = fmt.Fprintf(&fullPrompt, "%s\n\n", h)
 	}
-	fmt.Fprintf(&fullPrompt, "User follow-up question: %s", question)
+	_, _ = fmt.Fprintf(&fullPrompt, "User follow-up question: %s", question)
 
 	p.history = append(p.history, "User: "+question)
 	p.runAI(ai.GetSystemPrompt(), fullPrompt.String())
