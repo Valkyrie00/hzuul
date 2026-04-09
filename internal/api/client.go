@@ -83,6 +83,10 @@ func (c *Client) BuildURL(uuid string) string {
 	return fmt.Sprintf("%s/t/%s/build/%s", c.baseURL, c.tenant, uuid)
 }
 
+func (c *Client) StreamURL(uuid string) string {
+	return fmt.Sprintf("%s/t/%s/stream/%s?logfile=console.log", c.baseURL, c.tenant, uuid)
+}
+
 func (c *Client) ProjectURL(canonicalName string) string {
 	return fmt.Sprintf("%s/t/%s/project/%s", c.baseURL, c.tenant, canonicalName)
 }
