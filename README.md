@@ -4,32 +4,35 @@ Terminal User Interface for [Zuul CI/CD](https://zuul-ci.org/).
 
 Monitor pipelines, browse builds, stream logs, and manage your Zuul instance — all from the terminal.
 
-![HZUUL Preview](docs/images/hzuul-preview.gif)
+<p align="center">
+  <img src="docs/images/hzuul-preview.gif" alt="HZUUL Preview" width="700">
+</p>
 
-## Features
+## ✨ Features
 
-- **Status Dashboard** — Pipeline cards with color-coded build status (like the web UI)
+- **Status Dashboard** — Pipeline cards with color-coded build status
 - **All Views** — Projects, Jobs, Labels, Nodes, Autoholds, Semaphores, Builds, Buildsets, Downloads
 - **Build Detail** — Full build info with log streaming via WebSocket
-- **Download Logs** — Download full build logs to disk with concurrent workers, background progress, and persistent history
+- **Download Logs** — Background downloads with concurrent workers, progress tracking, and persistent history
 - **Tenant Picker** — Switch between tenants on the fly
 - **Kerberos Auth** — SPNEGO authentication for enterprise Zuul instances
 - **Multi-Instance** — Config profiles for multiple Zuul deployments (like kubeconfig)
-- **AI Analysis** *(Experimental)* — AI-powered build failure diagnosis with Claude and Gemini
+- **AI Analysis** *(Experimental)* — Build failure diagnosis with Claude and Gemini
 - **Admin Actions** — Dequeue and promote builds (with auth)
 - **Bookmarks** — Save builds for quick access
 - **Auto-Refresh** — Views refresh every 30 seconds
-- **Keyboard-Driven** — vim-style navigation, no mouse needed
+- **Keyboard-Driven** — Vim-style navigation, no mouse needed
 
-## Install
-
-### Quick install
+## 🚀 Quick Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Valkyrie00/hzuul/main/install.sh | bash
 ```
 
-Downloads the latest release for your platform (macOS/Linux, amd64/arm64), verifies the checksum, and installs to `/usr/local/bin`.
+> Downloads the latest release for your platform (macOS/Linux, amd64/arm64), verifies the checksum, and installs to `/usr/local/bin`.
+
+<details>
+<summary>Other installation methods</summary>
 
 ### From source
 
@@ -46,13 +49,13 @@ make build
 ./bin/hzuul
 ```
 
-## Configuration
+</details>
 
-HZUUL uses a YAML config at `~/.hzuul/config.yaml`.
+## ⚙️ Configuration
 
-On first run without a config, HZUUL defaults to `zuul.opendev.org` (public, no auth).
+HZUUL uses a YAML config at `~/.hzuul/config.yaml`. On first run without a config, it defaults to `zuul.opendev.org` (public, no auth).
 
-### Public instances (no auth required)
+### Basic usage
 
 ```yaml
 current_context: opendev
@@ -61,32 +64,9 @@ contexts:
   opendev:
     url: https://zuul.opendev.org
     tenant: openstack
-
-  opendev-zuul:
-    url: https://zuul.opendev.org
-    tenant: zuul
 ```
 
-### Private instance with Kerberos
-
-```yaml
-current_context: my-zuul
-
-contexts:
-  my-zuul:
-    url: https://zuul.internal.example.com
-    tenant: my-tenant
-    auth: kerberos
-    verify_ssl: true
-    ca_cert: /path/to/ca-bundle.pem   # optional, for internal CAs
-```
-
-```bash
-kinit                # get your Kerberos ticket
-hzuul                # HZUUL picks it up automatically
-```
-
-### Multi-instance example
+### Kerberos and multi-instance
 
 ```yaml
 current_context: my-zuul
@@ -102,102 +82,101 @@ contexts:
     tenant: openstack
 ```
 
-Switch context via `--context`:
-
 ```bash
-hzuul --context opendev
+kinit                       # get your Kerberos ticket
+hzuul                       # picks it up automatically
+hzuul --context opendev     # switch context
 ```
 
-## Keybindings
-
-| Key           | Action                    |
-| ------------- | ------------------------- |
-| `1`-`9`, `0`  | Switch to view (0=Downloads) |
-| `Tab`         | Next view                 |
-| `Shift+Tab`   | Previous view             |
-| `r`           | Refresh current view      |
-| `t`           | Change tenant             |
-| `Enter`       | Open detail               |
-| `l`           | Stream log (Builds view)  |
-| `d`           | Download logs (Build detail) |
-| `a`           | AI analysis (Build detail) |
-| `s`           | Save/unsave bookmark      |
-| `q` / `Esc`   | Quit / Back               |
-| `?`           | Help                      |
-
-## Download Logs
+## 📥 Download Logs
 
 Press `d` in any build detail view to download the full build logs to disk.
 
-- A path prompt appears pre-filled with `~/.hzuul/logs/<tenant>/<uuid>/`
+- Path prompt pre-filled with `~/.hzuul/logs/<context>/<tenant>/<uuid>/`
 - Downloads run in the background — navigate away while they complete
-- The **Downloads** tab (`0`) shows all active and past downloads with status, progress, and size
-- History is persisted in `~/.hzuul/downloads.json` across sessions
+- The **Downloads** tab (`0`) tracks all active and past downloads
+- History persisted in `~/.hzuul/downloads.json` across sessions
 - 10 concurrent workers for fast throughput
 
-| Key (Downloads view) | Action              |
-| -------------------- | ------------------- |
-| `d`                  | Remove from history |
-| `x`                  | Cancel active download |
-| `o`                  | Open download directory |
+| Key | Action                 |
+| --- | ---------------------- |
+| `d` | Remove from history    |
+| `x` | Cancel active download |
+| `o` | Open download directory|
 
-## AI Analysis (Experimental)
+## 🤖 AI Analysis (Experimental)
 
-HZUUL can analyze build failures using AI, directly from the TUI. Press `a` in any build detail or downloaded logs view to get an instant diagnosis.
+Press `a` in any build detail or downloaded logs view to get an instant AI-powered diagnosis.
 
-Supports multiple providers:
+| Provider           | Config `provider` | Auth                 |
+| ------------------ | ----------------- | -------------------- |
+| Claude (Anthropic) | `anthropic`       | API key              |
+| Claude (Vertex AI) | `vertex`          | `gcloud` credentials |
+| Gemini (AI Studio) | `gemini`          | API key              |
+| Gemini (Vertex AI) | `gemini-vertex`   | `gcloud` credentials |
 
-| Provider | Config `provider` | Auth |
-|---|---|---|
-| Claude (Anthropic) | `anthropic` | API key |
-| Claude (Vertex AI) | `vertex` | `gcloud` credentials |
-| Gemini (AI Studio) | `gemini` | API key |
-| Gemini (Vertex AI) | `gemini-vertex` | `gcloud` credentials |
+### Setup
 
-### Quick setup
+Add one of the following to `~/.hzuul/config.yaml`:
 
-Add to your `~/.hzuul/config.yaml`:
+<details>
+<summary>Anthropic API</summary>
 
 ```yaml
-# Anthropic API
 ai:
   provider: anthropic
   anthropic_api_key: sk-ant-...
+```
+</details>
 
-# Or Google Vertex AI (Claude)
+<details>
+<summary>Vertex AI (Claude)</summary>
+
+```yaml
 ai:
   provider: vertex
   vertex_project_id: my-gcp-project
   vertex_region: us-east5
+```
+</details>
 
-# Or Gemini (AI Studio)
+<details>
+<summary>Gemini (AI Studio)</summary>
+
+```yaml
 ai:
   provider: gemini
   gemini_api_key: AIza...
+```
+</details>
 
-# Or Gemini (Vertex AI)
+<details>
+<summary>Gemini (Vertex AI)</summary>
+
+```yaml
 ai:
   provider: gemini-vertex
   vertex_project_id: my-gcp-project
   vertex_region: us-central1
 ```
+</details>
 
 Set `provider: auto` (or omit it) to let HZUUL pick the first available provider.
 
 ### How it works
 
-- **Quick Analysis** (`a` from build detail) — analyzes build metadata and task failures from the Zuul API output
+- **Quick Analysis** (`a` from build detail) — analyzes build metadata and task failures from the API
 - **Full Analysis** (`a` from downloaded logs) — reads the complete log files for deeper context
 - Streaming responses with follow-up questions supported
 - No data leaves your machine unless you explicitly configure an AI provider
 
-## CLI Flags
+## 🔧 CLI Flags
 
-```
---config <path>    Config file (default: ~/.hzuul/config.yaml)
---context <name>   Use a specific context
---version          Show version
-```
+| Flag               | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `--config <path>`  | Config file (default: `~/.hzuul/config.yaml`)|
+| `--context <name>` | Use a specific context                       |
+| `--version`        | Show version                                 |
 
 ## Requirements
 
@@ -205,6 +184,6 @@ Set `provider: auto` (or omit it) to let HZUUL pick the first available provider
 - A Zuul instance with REST API enabled
 - For Kerberos auth: valid `kinit` ticket and `/etc/krb5.conf`
 
-## License
+## 📄 License
 
 Apache License 2.0 — see [LICENSE](LICENSE) for details.
