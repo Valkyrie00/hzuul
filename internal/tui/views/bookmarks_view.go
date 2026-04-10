@@ -154,7 +154,9 @@ func (v *BookmarksView) refreshFromAPI(client *api.Client) {
 	}
 }
 
-func (v *BookmarksView) IsModal() bool { return v.logView.IsAnalysisActive() }
+func (v *BookmarksView) IsModal() bool      { return v.logView.IsAnalysisActive() }
+func (v *BookmarksView) CanReconnect() bool { return v.logView.CanReconnect() }
+func (v *BookmarksView) Reconnect()         { v.logView.Reconnect() }
 
 func (v *BookmarksView) SetFilter(_ string) {}
 

@@ -208,6 +208,8 @@ func (v *JobsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookma
 func (v *JobsView) Root() tview.Primitive                  { return v.root }
 
 func (v *JobsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *JobsView) CanReconnect() bool     { return v.logView.CanReconnect() }
+func (v *JobsView) Reconnect()             { v.logView.Reconnect() }
 func (v *JobsView) IsLiveFilterable() bool { return true }
 
 func (v *JobsView) SetFilter(term string) {

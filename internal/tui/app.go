@@ -406,6 +406,10 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case 'r':
 		idx := a.nav.Active()
+		if rc, ok := a.views[idx].(views.Reconnectable); ok && rc.CanReconnect() {
+			rc.Reconnect()
+			return nil
+		}
 		a.views[idx].Load(a.client)
 		a.updateFooterTime()
 		return nil
