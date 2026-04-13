@@ -243,6 +243,8 @@ func parseBuildFilter(text string) api.BuildFilter {
 			f.Result = value
 		case "change":
 			f.Change = value
+		case "uuid":
+			f.UUID = value
 		default:
 			f.JobName = text
 		}
@@ -275,6 +277,8 @@ func parseBuildsetFilter(text string) api.BuildFilter {
 			f.Result = value
 		case "change":
 			f.Change = value
+		case "uuid":
+			f.UUID = value
 		default:
 			f.Pipeline = text
 		}

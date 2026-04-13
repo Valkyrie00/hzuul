@@ -56,6 +56,7 @@ type BuildFilter struct {
 	Limit         int
 	Skip          int
 	ExcludeResult string
+	UUID          string // TUI-only: routed to /build/{uuid} instead of /builds query
 }
 
 func (f *BuildFilter) toParams() url.Values {
