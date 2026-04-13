@@ -234,6 +234,10 @@ func (v *BuildsView) SetFilter(term string) {
 		return
 	}
 	v.curFilter = parseBuildFilter(term)
+	if v.curFilter.UUID != "" {
+		v.searchByUUID(v.curFilter.UUID)
+		return
+	}
 	v.skip = 0
 	v.noMore = false
 	v.countLabel.Clear()
@@ -291,6 +295,37 @@ func (v *BuildsView) searchServer() {
 				v.table.Select(1, 0)
 				v.table.ScrollToBeginning()
 			}
+		})
+	}()
+}
+
+func (v *BuildsView) searchByUUID(uuid string) {
+	if v.loading || v.client == nil {
+		return
+	}
+	v.loading = true
+	v.skip = 0
+	v.noMore = true
+	v.countLabel.Clear()
+	_, _ = fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
+
+	go func() {
+		build, err := v.client.GetBuild(uuid)
+		v.app.QueueUpdateDraw(func() {
+			v.loading = false
+			v.table.Clear()
+			setBuildHeader(v.table)
+			if err != nil {
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetSelectable(false))
+				v.countLabel.Clear()
+				return
+			}
+			v.builds = []api.Build{*build}
+			v.skip = 1
+			v.renderRows(0)
+			v.updateCount()
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
 		})
 	}()
 }
