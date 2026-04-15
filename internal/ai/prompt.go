@@ -69,18 +69,18 @@ func BuildDirAnalysisPrompt(rec DirAnalysisInput, da *DirAnalysis) string {
 	}
 
 	writeFailedTasks(&b, da.FailedTasks)
-	writeLogContext(&b, da.LogContext, 6)
+	writeLogContext(&b, da.LogContext, 20)
 
 	if len(da.LogFiles) > 0 {
-		fmt.Fprintf(&b, "\n--- Log File Snippets (tails from downloaded files) ---\n")
+		fmt.Fprintf(&b, "\n--- Log File Extracts (from downloaded files) ---\n")
 		for _, lf := range da.LogFiles {
 			fmt.Fprintf(&b, "\n=== %s ===\n%s\n", lf.Path, lf.Content)
 		}
 	}
 
-	fmt.Fprintf(&b, "\nThe user has the full log files at the directory shown above. ")
-	fmt.Fprintf(&b, "When referencing specific files, use the relative paths from the listing. ")
-	fmt.Fprintf(&b, "If the snippets aren't enough, suggest which file the user should look at for more detail.")
+	fmt.Fprintf(&b, "\nThe log extracts above are centered around detected errors, not just file tails. ")
+	fmt.Fprintf(&b, "Use these to identify the root cause. ")
+	fmt.Fprintf(&b, "When referencing specific files, use the relative paths from the listing.")
 	fmt.Fprintf(&b, "\n\nProvide a concise analysis: root cause, category, and recommended action.")
 	return b.String()
 }

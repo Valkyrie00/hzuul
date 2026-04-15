@@ -11,9 +11,10 @@ import (
 	"github.com/Valkyrie00/hzuul/internal/api"
 )
 
-const maxLogFileSize = 1024 * 1024    // 1 MB per file (tail)
+const maxLogFileSize = 1024 * 1024    // 1 MB per file for remote fetch
 const maxTotalLogContext = 768 * 1024 // 768 KB total for the prompt
 const maxSnippetLines = 300
+const maxErrorSnippetLines = 500
 
 // priorityFiles are read first and given more generous space.
 var priorityFiles = []string{
@@ -69,9 +70,6 @@ func ReadLogsFromDir(destDir string) (*DirAnalysis, error) {
 			continue
 		}
 		content := StripANSI(string(data))
-		if len(content) > maxLogFileSize {
-			content = content[len(content)-maxLogFileSize:]
-		}
 
 		blocks := GrepLogContext(content, 5)
 		if len(blocks) > 0 {
@@ -83,7 +81,7 @@ func ReadLogsFromDir(destDir string) (*DirAnalysis, error) {
 			rel = filepath.Base(lf)
 		}
 
-		snippet := extractRelevantSnippet(content)
+		snippet := extractErrorCenteredSnippet(content)
 		if snippet != "" && totalCtx+len(snippet) <= maxTotalLogContext {
 			result.LogFiles = append(result.LogFiles, LogFileSnippet{
 				Path:    rel,
@@ -164,7 +162,7 @@ func ReadLogsFromRemote(client *api.Client, build *api.Build, jobOutput []api.Pl
 			result.LogContext = append(result.LogContext, blocks...)
 		}
 
-		snippet := extractRelevantSnippet(content)
+		snippet := extractErrorCenteredSnippet(content)
 		if snippet != "" && totalCtx+len(snippet) <= maxTotalLogContext {
 			result.LogFiles = append(result.LogFiles, LogFileSnippet{
 				Path:    fr.path,
@@ -302,6 +300,46 @@ func extractRelevantSnippet(content string) string {
 		return content
 	}
 	return strings.Join(lines[len(lines)-maxSnippetLines:], "\n")
+}
+
+// extractErrorCenteredSnippet finds the last real error (fatal/FAILED not
+// followed by ...ignoring) and returns a window of maxErrorSnippetLines
+// centered around it, biased toward showing context before the error.
+// Falls back to a tail snippet when no error pattern is found.
+func extractErrorCenteredSnippet(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) <= maxErrorSnippetLines {
+		return content
+	}
+
+	total := len(lines)
+	lastErrorIdx := -1
+	for i := total - 1; i >= 0; i-- {
+		if fatalPattern.MatchString(lines[i]) && !isIgnoredFatal(lines, i, total) {
+			lastErrorIdx = i
+			break
+		}
+	}
+
+	if lastErrorIdx < 0 {
+		return strings.Join(lines[total-maxSnippetLines:], "\n")
+	}
+
+	before := maxErrorSnippetLines * 2 / 3
+	after := maxErrorSnippetLines - before
+
+	start := lastErrorIdx - before
+	end := lastErrorIdx + after
+	if start < 0 {
+		end = min(total, end-start)
+		start = 0
+	}
+	if end > total {
+		start = max(0, start-(end-total))
+		end = total
+	}
+
+	return strings.Join(lines[start:end], "\n")
 }
 
 func mergeStats(output []api.PlaybookOutput) map[string]api.HostStats {

@@ -24,7 +24,6 @@ func GrepLogContext(text string, contextLines int) []LogBlock {
 	allLines := strings.Split(text, "\n")
 	total := len(allLines)
 
-	matchSet := make(map[int]struct{})
 	type matched struct {
 		idx  int
 		text string
@@ -33,7 +32,9 @@ func GrepLogContext(text string, contextLines int) []LogBlock {
 
 	for i, line := range allLines {
 		if fatalPattern.MatchString(line) {
-			matchSet[i] = struct{}{}
+			if isIgnoredFatal(allLines, i, total) {
+				continue
+			}
 			matches = append(matches, matched{i + 1, line})
 		}
 	}
@@ -42,9 +43,13 @@ func GrepLogContext(text string, contextLines int) []LogBlock {
 		return nil
 	}
 
-	// Limit to first 15 matches
 	if len(matches) > 15 {
-		matches = matches[:15]
+		matches = matches[len(matches)-15:]
+	}
+
+	matchSet := make(map[int]struct{}, len(matches))
+	for _, m := range matches {
+		matchSet[m.idx-1] = struct{}{}
 	}
 
 	type rng struct{ start, end int }
@@ -65,9 +70,8 @@ func GrepLogContext(text string, contextLines int) []LogBlock {
 		}
 	}
 
-	// Limit to 7 blocks
 	if len(ranges) > 7 {
-		ranges = ranges[:7]
+		ranges = ranges[len(ranges)-7:]
 	}
 
 	blocks := make([]LogBlock, 0, len(ranges))
@@ -88,6 +92,19 @@ func GrepLogContext(text string, contextLines int) []LogBlock {
 		blocks = append(blocks, LogBlock{Lines: lines})
 	}
 	return blocks
+}
+
+// isIgnoredFatal returns true when a fatal: line is followed (within the
+// next two non-empty lines) by Ansible's "...ignoring" marker.
+func isIgnoredFatal(lines []string, idx, total int) bool {
+	for j := idx + 1; j < total && j <= idx+2; j++ {
+		trimmed := strings.TrimSpace(lines[j])
+		if trimmed == "" {
+			continue
+		}
+		return strings.Contains(trimmed, "...ignoring")
+	}
+	return false
 }
 
 func StripANSI(text string) string {
