@@ -122,7 +122,7 @@ func (v *DownloadsView) IsModal() bool { return v.analysis.IsActive() }
 
 func (v *DownloadsView) updateKeys() {
 	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	_, _ = fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
 }
 
 func (v *DownloadsView) selectedRecord() *DownloadRecord {
