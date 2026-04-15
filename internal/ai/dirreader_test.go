@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,62 @@ func TestExtractRelevantSnippet_Long(t *testing.T) {
 	gotLines := strings.Split(got, "\n")
 	if len(gotLines) != maxSnippetLines {
 		t.Errorf("expected %d lines, got %d", maxSnippetLines, len(gotLines))
+	}
+}
+
+func TestExtractErrorCenteredSnippet_Short(t *testing.T) {
+	content := "line1\nfatal: boom\nline3"
+	got := extractErrorCenteredSnippet(content)
+	if got != content {
+		t.Errorf("short content should be returned as-is")
+	}
+}
+
+func TestExtractErrorCenteredSnippet_CentersOnError(t *testing.T) {
+	lines := make([]string, 1000)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	lines[400] = "fatal: the real error"
+	content := strings.Join(lines, "\n")
+	got := extractErrorCenteredSnippet(content)
+	if !strings.Contains(got, "fatal: the real error") {
+		t.Error("snippet should contain the error line")
+	}
+	gotLines := strings.Split(got, "\n")
+	if len(gotLines) != maxErrorSnippetLines {
+		t.Errorf("expected %d lines, got %d", maxErrorSnippetLines, len(gotLines))
+	}
+}
+
+func TestExtractErrorCenteredSnippet_SkipsIgnored(t *testing.T) {
+	lines := make([]string, 1000)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	lines[400] = "fatal: ignored error"
+	lines[401] = "...ignoring"
+	lines[800] = "fatal: real error"
+	content := strings.Join(lines, "\n")
+	got := extractErrorCenteredSnippet(content)
+	if !strings.Contains(got, "fatal: real error") {
+		t.Error("snippet should center on the non-ignored error")
+	}
+}
+
+func TestExtractErrorCenteredSnippet_FallsBackToTail(t *testing.T) {
+	lines := make([]string, 1000)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	content := strings.Join(lines, "\n")
+	got := extractErrorCenteredSnippet(content)
+	gotLines := strings.Split(got, "\n")
+	if len(gotLines) != maxSnippetLines {
+		t.Errorf("expected %d tail lines, got %d", maxSnippetLines, len(gotLines))
+	}
+	if !strings.Contains(got, "line 999") {
+		t.Error("tail fallback should include the last line")
 	}
 }
 
