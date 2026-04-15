@@ -98,11 +98,38 @@ Press `d` in any build detail view to download the full build logs to disk.
 - History persisted in `~/.hzuul/downloads.json` across sessions
 - 10 concurrent workers for fast throughput
 
-| Key | Action                 |
-| --- | ---------------------- |
-| `d` | Remove from history    |
-| `x` | Cancel active download |
-| `o` | Open download directory|
+| Key | Action                              |
+| --- | ----------------------------------- |
+| `d` | Delete download (removes log files) |
+| `x` | Cancel active download              |
+| `o` | Open download directory             |
+| `a` | AI analysis on downloaded logs      |
+
+## 🔍 Filtering & Search
+
+Press `/` from any view to open the filter bar. Type your query and press `Enter` to apply, `Esc` to clear.
+
+### Server-side filters (Builds & Buildsets)
+
+Builds and Buildsets support structured `key:value` filters that query the Zuul API directly:
+
+| Filter | Example | Description |
+| --- | --- | --- |
+| `job:` | `job:tox-py312` | Filter by job name |
+| `project:` | `project:openstack/nova` | Filter by project |
+| `pipeline:` | `pipeline:check` | Filter by pipeline |
+| `branch:` | `branch:master` | Filter by branch |
+| `result:` | `result:FAILURE` | Filter by build result |
+| `change:` | `change:123456` | Filter by change number |
+| `uuid:` | `uuid:abc123...` | Jump directly to a specific build |
+
+**Smart defaults** — If you type without a `key:` prefix, the filter is applied automatically based on context:
+- Text containing `/` is treated as a **project** (e.g. `openstack/nova`)
+- Anything else is treated as a **job name** (Builds) or **pipeline** (Buildsets)
+
+### Client-side filters (other views)
+
+Projects, Jobs, Labels, Nodes, Autoholds, and Semaphores filter in-memory with live results as you type — no `Enter` needed.
 
 ## 🤖 AI Analysis (Experimental)
 

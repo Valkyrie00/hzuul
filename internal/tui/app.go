@@ -457,10 +457,11 @@ func (a *App) showHelp() {
 
  [#3884f4]Tables[-:-:-]
    Up/Down     Navigate rows
-   /           Search (Esc to clear)
+   /           Filter (Enter to apply, Esc to clear)
                Builds/Buildsets: server-side
                job:x  project:x  pipeline:x
-               branch:x  result:x  change:x
+               branch:x  result:x  change:x  uuid:x
+               Smart: org/repo → project, text → job
 
  [#78788c]Auto-refresh: every 30 seconds[-:-:-]`
 
