@@ -2,6 +2,7 @@ package views
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,25 +19,27 @@ type DLStatus string
 const (
 	DLDownloading DLStatus = "downloading"
 	DLCompleted   DLStatus = "completed"
+	DLPartial     DLStatus = "partial"
 	DLFailed      DLStatus = "failed"
 	DLCancelled   DLStatus = "cancelled"
 )
 
 type DownloadRecord struct {
-	UUID       string   `json:"uuid"`
-	JobName    string   `json:"job_name"`
-	Project    string   `json:"project"`
-	Tenant     string   `json:"tenant"`
-	Host       string   `json:"host,omitempty"`
-	Status     DLStatus `json:"status"`
-	TotalFiles int      `json:"total_files"`
-	DoneFiles  int      `json:"done_files"`
-	TotalBytes int64    `json:"total_bytes"`
-	DoneBytes  int64    `json:"done_bytes"`
-	DestDir    string   `json:"dest_dir"`
-	StartedAt  string   `json:"started_at"`
-	EndedAt    string   `json:"ended_at,omitempty"`
-	Error      string   `json:"error,omitempty"`
+	UUID        string   `json:"uuid"`
+	JobName     string   `json:"job_name"`
+	Project     string   `json:"project"`
+	Tenant      string   `json:"tenant"`
+	Host        string   `json:"host,omitempty"`
+	Status      DLStatus `json:"status"`
+	TotalFiles  int      `json:"total_files"`
+	DoneFiles   int      `json:"done_files"`
+	FailedFiles int      `json:"failed_files,omitempty"`
+	TotalBytes  int64    `json:"total_bytes"`
+	DoneBytes   int64    `json:"done_bytes"`
+	DestDir     string   `json:"dest_dir"`
+	StartedAt   string   `json:"started_at"`
+	EndedAt     string   `json:"ended_at,omitempty"`
+	Error       string   `json:"error,omitempty"`
 }
 
 type DownloadManager struct {
@@ -117,6 +120,7 @@ func (dm *DownloadManager) Start(
 			if idx := dm.findLocked(build.UUID); idx >= 0 {
 				dm.records[idx].TotalFiles = p.TotalFiles
 				dm.records[idx].DoneFiles = p.DoneFiles
+				dm.records[idx].FailedFiles = p.FailedFiles
 				dm.records[idx].TotalBytes = p.TotalBytes
 				dm.records[idx].DoneBytes = p.DoneBytes
 			}
@@ -139,7 +143,13 @@ func (dm *DownloadManager) Start(
 				case <-stopCh:
 					dm.records[idx].Status = DLCancelled
 				default:
-					dm.records[idx].Status = DLFailed
+					var partial *api.PartialDownloadError
+					if errors.As(err, &partial) {
+						dm.records[idx].Status = DLPartial
+						dm.records[idx].FailedFiles = partial.FailedFiles
+					} else {
+						dm.records[idx].Status = DLFailed
+					}
 					dm.records[idx].Error = err.Error()
 				}
 			} else {

@@ -228,6 +228,8 @@ func statusCellForDL(s DLStatus) *tview.TableCell {
 	switch s {
 	case DLCompleted:
 		text, color = "COMPLETED", tcell.ColorGreen
+	case DLPartial:
+		text, color = "PARTIAL", tcell.ColorOrange
 	case DLFailed:
 		text, color = "FAILED", tcell.ColorRed
 	case DLCancelled:
@@ -248,7 +250,11 @@ func progressTextForDL(r DownloadRecord) string {
 		return ""
 	}
 	pct := r.DoneFiles * 100 / r.TotalFiles
-	return fmt.Sprintf("%d%% (%d/%d)", pct, r.DoneFiles, r.TotalFiles)
+	base := fmt.Sprintf("%d%% (%d/%d)", pct, r.DoneFiles, r.TotalFiles)
+	if r.FailedFiles > 0 && r.Status != DLDownloading {
+		base += fmt.Sprintf(" [red]%d failed[-]", r.FailedFiles)
+	}
+	return base
 }
 
 func formatDLDate(ts string) string {

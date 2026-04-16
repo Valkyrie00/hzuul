@@ -30,10 +30,21 @@ type FileEntry struct {
 type DownloadProgress struct {
 	TotalFiles  int
 	DoneFiles   int
+	FailedFiles int
 	TotalBytes  int64
 	DoneBytes   int64
 	CurrentFile string
 	Err         error
+}
+
+type PartialDownloadError struct {
+	FailedFiles int
+	TotalFiles  int
+	FirstErr    error
+}
+
+func (e *PartialDownloadError) Error() string {
+	return fmt.Sprintf("%d/%d files failed: %v", e.FailedFiles, e.TotalFiles, e.FirstErr)
 }
 
 func GetManifestURL(build *Build) string {
@@ -111,6 +122,7 @@ func (c *Client) DownloadBuildLogs(
 
 	var doneFiles atomic.Int64
 	var doneBytes atomic.Int64
+	var failedFiles atomic.Int64
 
 	const workers = 10
 	work := make(chan FileEntry, len(files))
@@ -137,14 +149,17 @@ func (c *Client) DownloadBuildLogs(
 				err := c.downloadFile(baseLogURL+fe.Path, filepath.Join(destDir, fe.Path))
 				if err != nil {
 					errOnce.Do(func() { firstErr = fmt.Errorf("downloading %s: %w", fe.Path, err) })
+					failedFiles.Add(1)
 				}
 
 				done := int(doneFiles.Add(1))
+				failed := int(failedFiles.Load())
 				bytes := doneBytes.Add(fe.Size)
 				if progress != nil {
 					progress(DownloadProgress{
 						TotalFiles:  len(files),
 						DoneFiles:   done,
+						FailedFiles: failed,
 						TotalBytes:  totalBytes,
 						DoneBytes:   bytes,
 						CurrentFile: fe.Path,
@@ -155,6 +170,15 @@ func (c *Client) DownloadBuildLogs(
 	}
 
 	wg.Wait()
+
+	failed := int(failedFiles.Load())
+	if failed > 0 && failed < len(files) {
+		return &PartialDownloadError{
+			FailedFiles: failed,
+			TotalFiles:  len(files),
+			FirstErr:    firstErr,
+		}
+	}
 	return firstErr
 }
 
