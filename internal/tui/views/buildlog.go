@@ -697,7 +697,9 @@ func (v *BuildLogView) renderBuildDetail(stats map[string]api.HostStats, failed 
 	}
 
 	v.contentFlex.AddItem(v.textView, 0, 1, true)
-	v.app.SetFocus(v.textView)
+	if !v.inputActive {
+		v.app.SetFocus(v.textView)
+	}
 }
 
 func (v *BuildLogView) buildInfoLines() []string {
