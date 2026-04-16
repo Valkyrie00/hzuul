@@ -11,14 +11,24 @@ import (
 	"github.com/rivo/tview"
 )
 
+type dlConfirmAction int
+
+const (
+	dlConfirmNone   dlConfirmAction = iota
+	dlConfirmCancel
+	dlConfirmDelete
+)
+
 type DownloadsView struct {
-	pages    *tview.Pages
-	root     *tview.Flex
-	table    *tview.Table
-	keys     *tview.TextView
-	app      *tview.Application
-	manager  *DownloadManager
-	analysis *AnalysisPanel
+	pages       *tview.Pages
+	root        *tview.Flex
+	table       *tview.Table
+	keys        *tview.TextView
+	app         *tview.Application
+	manager     *DownloadManager
+	analysis    *AnalysisPanel
+	confirmKind dlConfirmAction
+	confirmUUID string
 }
 
 func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg config.AIConfig) *DownloadsView {
@@ -68,6 +78,16 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg co
 	})
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if v.confirmKind != dlConfirmNone {
+			switch event.Rune() {
+			case 'y', 'Y':
+				v.executeConfirm()
+			case 'n', 'N':
+				v.cancelConfirm()
+			}
+			return nil
+		}
+
 		rec := v.selectedRecord()
 		if rec == nil {
 			return event
@@ -85,12 +105,12 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg co
 			return nil
 		case event.Rune() == 'x':
 			if rec.Status == DLDownloading {
-				manager.Cancel(rec.UUID)
+				v.askConfirm(dlConfirmCancel, rec.UUID, rec.JobName)
 			}
 			return nil
 		case event.Rune() == 'd' || event.Key() == tcell.KeyDelete || event.Key() == tcell.KeyBackspace || event.Key() == tcell.KeyBackspace2:
 			if rec.Status != DLDownloading {
-				manager.Remove(rec.UUID)
+				v.askConfirm(dlConfirmDelete, rec.UUID, rec.JobName)
 			}
 			return nil
 		}
@@ -118,11 +138,45 @@ func (v *DownloadsView) Load(_ *api.Client) {
 
 func (v *DownloadsView) SetFilter(_ string) {}
 
-func (v *DownloadsView) IsModal() bool { return v.analysis.IsActive() }
+func (v *DownloadsView) IsModal() bool { return v.analysis.IsActive() || v.confirmKind != dlConfirmNone }
 
 func (v *DownloadsView) updateKeys() {
 	v.keys.Clear()
 	_, _ = fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+}
+
+func (v *DownloadsView) askConfirm(kind dlConfirmAction, uuid, jobName string) {
+	v.confirmKind = kind
+	v.confirmUUID = uuid
+
+	v.keys.Clear()
+	label := "Delete"
+	if kind == dlConfirmCancel {
+		label = "Cancel"
+	}
+	_, _ = fmt.Fprintf(v.keys, " [red::b]%s[-:-:-] [white]%s[-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
+		label, truncate(jobName, 40))
+}
+
+func (v *DownloadsView) executeConfirm() {
+	uuid := v.confirmUUID
+	kind := v.confirmKind
+	v.confirmKind = dlConfirmNone
+	v.confirmUUID = ""
+	v.updateKeys()
+
+	switch kind {
+	case dlConfirmCancel:
+		v.manager.Cancel(uuid)
+	case dlConfirmDelete:
+		v.manager.Remove(uuid)
+	}
+}
+
+func (v *DownloadsView) cancelConfirm() {
+	v.confirmKind = dlConfirmNone
+	v.confirmUUID = ""
+	v.updateKeys()
 }
 
 func (v *DownloadsView) selectedRecord() *DownloadRecord {
@@ -235,7 +289,7 @@ func statusCellForDL(s DLStatus) *tview.TableCell {
 	case DLCancelled:
 		text, color = "CANCELLED", tcell.ColorYellow
 	case DLDownloading:
-		text, color = "DOWNLOADING", tcell.ColorBlue
+		text, color = "DOWNLOADING", ColorAccent
 	default:
 		return tview.NewTableCell(" " + string(s))
 	}
@@ -249,12 +303,9 @@ func progressTextForDL(r DownloadRecord) string {
 		}
 		return ""
 	}
-	pct := r.DoneFiles * 100 / r.TotalFiles
-	base := fmt.Sprintf("%d%% (%d/%d)", pct, r.DoneFiles, r.TotalFiles)
-	if r.FailedFiles > 0 && r.Status != DLDownloading {
-		base += fmt.Sprintf(" [red]%d failed[-]", r.FailedFiles)
-	}
-	return base
+	succeeded := r.DoneFiles - r.FailedFiles
+	pct := succeeded * 100 / r.TotalFiles
+	return fmt.Sprintf("%d%% (%d/%d)", pct, succeeded, r.TotalFiles)
 }
 
 func formatDLDate(ts string) string {
