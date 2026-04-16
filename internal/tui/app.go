@@ -15,6 +15,11 @@ import (
 
 const defaultRefreshInterval = 30 * time.Second
 
+type filterState struct {
+	text string
+	pos  int
+}
+
 type App struct {
 	app             *tview.Application
 	pages           *tview.Pages
@@ -36,6 +41,8 @@ type App struct {
 	bmManager       *views.BookmarkManager
 	stopCh          chan struct{}
 	refreshInterval time.Duration
+	savedFilters    map[int]filterState
+	viewLoaded      map[int]bool
 }
 
 func New(cfg *config.Config, version string) (*App, error) {
@@ -63,6 +70,8 @@ func New(cfg *config.Config, version string) (*App, error) {
 		version:         version,
 		stopCh:          make(chan struct{}),
 		refreshInterval: defaultRefreshInterval,
+		savedFilters:    make(map[int]filterState),
+		viewLoaded:      make(map[int]bool),
 	}
 
 	a.dlManager = views.NewDownloadManager(a.app)
@@ -130,6 +139,7 @@ func (a *App) initClient(ctx *config.Context, loadingText *tview.TextView) {
 		a.pages.RemovePage("loading")
 		a.pages.SwitchToPage(tabNames[0])
 		a.views[0].Load(a.client)
+		a.viewLoaded[0] = true
 		a.updateFooterTime()
 		go a.autoRefresh()
 	})
@@ -267,17 +277,31 @@ func (a *App) switchView(index int) {
 		return
 	}
 	old := a.nav.Active()
-	if old >= 0 && old < len(a.views) {
-		a.views[old].SetFilter("")
-	}
+	a.savedFilters[old] = filterState{text: a.filterText, pos: a.filterPos}
+
+	saved := a.savedFilters[index]
+	a.filterText = saved.text
+	a.filterPos = saved.pos
 	a.filterOpen = false
-	a.filterText = ""
-	a.filterPos = 0
 	a.updateFooterKeysText()
 
 	a.pages.SwitchToPage(tabNames[index])
-	a.views[index].Load(a.client)
+	if !a.viewLoaded[index] {
+		a.views[index].Load(a.client)
+		a.viewLoaded[index] = true
+	}
 	a.updateFooterTime()
+}
+
+func (a *App) resetAllViews() {
+	for i := range a.views {
+		a.views[i].SetFilter("")
+		delete(a.viewLoaded, i)
+		delete(a.savedFilters, i)
+	}
+	a.filterText = ""
+	a.filterPos = 0
+	a.updateFooterKeysText()
 }
 
 func (a *App) autoRefresh() {
@@ -520,8 +544,10 @@ func (a *App) showTenantPicker() {
 					_, _ = fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
 						strings.ToUpper(a.version), ctx.URL, name, a.cfg.CurrentContext, a.aiLabel())
 					a.dismissModal("tenants")
+					a.resetAllViews()
 					idx := a.nav.Active()
 					a.views[idx].Load(a.client)
+					a.viewLoaded[idx] = true
 				})
 			}
 
