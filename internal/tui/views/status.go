@@ -412,8 +412,8 @@ func (v *StatusView) rebuildTable() {
 				continue
 			}
 
-			running, success, failure, other := jobCounts(sr.item.Jobs)
-			summary := jobSummaryText(running, success, failure, other)
+			running, queued, success, failure, other := jobCounts(sr.item.Jobs)
+			summary := jobSummaryText(running, queued, success, failure, other)
 			elapsed := formatElapsed(sr.item.EnqueueTime, now)
 
 			arrow := "▸"
@@ -424,7 +424,7 @@ func (v *StatusView) rebuildTable() {
 			v.table.SetCell(tableRow, 0, tview.NewTableCell(fmt.Sprintf("   %s %s", arrow, project)).SetTextColor(tcell.ColorWhite).SetExpansion(1))
 			v.table.SetCell(tableRow, 1, tview.NewTableCell(" #"+displayID).SetTextColor(muted).SetExpansion(0))
 			v.table.SetCell(tableRow, 2, tview.NewTableCell(" "+owner).SetTextColor(tcell.NewRGBColor(180, 160, 220)).SetExpansion(0))
-			bar := compactProgress(running, success, failure, other, total)
+			bar := compactProgress(running, queued, success, failure, other, total)
 			v.table.SetCell(tableRow, 3, tview.NewTableCell(" "+bar).SetExpansion(0))
 			v.table.SetCell(tableRow, 4, tview.NewTableCell(elapsed+" ").SetTextColor(muted).SetAlign(tview.AlignRight).SetExpansion(0))
 			v.table.SetCell(tableRow, 5, tview.NewTableCell(" "+summary).SetTextColor(muted))
@@ -437,6 +437,8 @@ func (v *StatusView) rebuildTable() {
 					result := "running"
 					if job.Result != nil {
 						result = *job.Result
+					} else if isJobQueued(job) {
+						result = "queued"
 					}
 					nameColor := jobNameColor(result)
 					nv := ""
@@ -636,8 +638,11 @@ func (v *StatusView) executeAdminAction() {
 
 func jobResultCell(result string) *tview.TableCell {
 	display := result
-	if result == "running" {
+	switch result {
+	case "running":
 		display = "RUNNING"
+	case "queued":
+		display = "QUEUED"
 	}
 	var color tcell.Color
 	switch result {
@@ -649,6 +654,8 @@ func jobResultCell(result string) *tview.TableCell {
 		color = tcell.NewRGBColor(242, 201, 76)
 	case "running":
 		color = tcell.NewRGBColor(56, 132, 244)
+	case "queued":
+		color = tcell.NewRGBColor(120, 120, 140)
 	default:
 		color = tcell.NewRGBColor(120, 120, 140)
 	}
@@ -675,10 +682,19 @@ func parseJobStreamURL(job api.JobStatus) (uuid, logfile string) {
 	return
 }
 
-func jobCounts(jobs []api.JobStatus) (running, success, failure, other int) {
+func isJobQueued(j api.JobStatus) bool {
+	s := j.StartTime.String()
+	return s == "" || s == "0"
+}
+
+func jobCounts(jobs []api.JobStatus) (running, queued, success, failure, other int) {
 	for _, j := range jobs {
 		if j.Result == nil {
-			running++
+			if isJobQueued(j) {
+				queued++
+			} else {
+				running++
+			}
 			continue
 		}
 		switch *j.Result {
@@ -693,7 +709,7 @@ func jobCounts(jobs []api.JobStatus) (running, success, failure, other int) {
 	return
 }
 
-func compactProgress(running, success, failure, other, total int) string {
+func compactProgress(running, queued, success, failure, other, total int) string {
 	if total == 0 {
 		return "[::d]—[-]"
 	}
@@ -706,6 +722,7 @@ func compactProgress(running, success, failure, other, total int) string {
 		{success, "[green]"},
 		{failure, "[red]"},
 		{running, "[#3884f4]"},
+		{queued, "[#78788c]"},
 		{other, "[yellow]"},
 	}
 	filled := 0
@@ -725,7 +742,7 @@ func compactProgress(running, success, failure, other, total int) string {
 	return b.String()
 }
 
-func jobSummaryText(running, success, failure, other int) string {
+func jobSummaryText(running, queued, success, failure, other int) string {
 	var parts []string
 	if success > 0 {
 		parts = append(parts, fmt.Sprintf("[#48c78e]%d[-:-:-]", success))
@@ -735,6 +752,9 @@ func jobSummaryText(running, success, failure, other int) string {
 	}
 	if running > 0 {
 		parts = append(parts, fmt.Sprintf("[#3884f4]%d[-:-:-]", running))
+	}
+	if queued > 0 {
+		parts = append(parts, fmt.Sprintf("[#78788c]%d[-:-:-]", queued))
 	}
 	if other > 0 {
 		parts = append(parts, fmt.Sprintf("[#f2c94c]%d[-:-:-]", other))
@@ -746,17 +766,25 @@ func jobSummaryText(running, success, failure, other int) string {
 }
 
 func jobNameColor(result string) tcell.Color {
-	if result == "running" {
+	switch result {
+	case "running":
 		return tcell.NewRGBColor(80, 160, 255)
+	case "queued":
+		return tcell.NewRGBColor(120, 120, 140)
+	default:
+		return resultColor(result)
 	}
-	return resultColor(result)
 }
 
 func jobIcon(result string) string {
-	if result == "running" {
+	switch result {
+	case "running":
 		return "●"
+	case "queued":
+		return "○"
+	default:
+		return resultIcon(result)
 	}
-	return resultIcon(result)
 }
 
 func jobTimeParts(job api.JobStatus, now time.Time) (elapsed, eta string) {
