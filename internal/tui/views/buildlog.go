@@ -39,6 +39,7 @@ type BuildLogView struct {
 	inputActive    bool
 	dequeuePending bool
 	streamDead     bool
+	autoScroll     bool
 	headerTicker   *time.Ticker
 	streamStart    time.Time
 
@@ -117,7 +118,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		AddItem(pages, 0, 1, true)
 	root.SetBackgroundColor(bg)
 
-	return &BuildLogView{
+	v := &BuildLogView{
 		root:         root,
 		textView:     textView,
 		contentFlex:  contentFlex,
@@ -132,7 +133,39 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		pages:        pages,
 		buildLayout:  buildLayout,
 		analysis:     panel,
+		autoScroll:   true,
 	}
+
+	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if !v.isStatic {
+			switch event.Key() {
+			case tcell.KeyUp, tcell.KeyPgUp:
+				if v.autoScroll {
+					v.autoScroll = false
+					v.updateKeys()
+				}
+			case tcell.KeyEnd:
+				if !v.autoScroll {
+					v.autoScroll = true
+					v.textView.ScrollToEnd()
+					v.updateKeys()
+				}
+			case tcell.KeyDown, tcell.KeyPgDn:
+				row, _ := v.textView.GetScrollOffset()
+				_, _, _, height := v.textView.GetInnerRect()
+				content := strings.Count(v.textView.GetText(true), "\n") + 1
+				if row+height >= content-1 {
+					if !v.autoScroll {
+						v.autoScroll = true
+						v.updateKeys()
+					}
+				}
+			}
+		}
+		return event
+	})
+
+	return v
 }
 
 func (v *BuildLogView) Root() tview.Primitive { return v.root }
@@ -171,7 +204,11 @@ func (v *BuildLogView) updateKeys() {
 		if v.client != nil && v.client.HasAdminToken() {
 			base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
 		}
-		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
+		if !v.autoScroll {
+			base += "  [yellow]⏸ scroll paused[-:-:-]  [#3884f4]End[-:-:-][::d]:resume[-:-:-]"
+		} else {
+			base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
+		}
 		_, _ = fmt.Fprint(v.keys, base)
 	}
 }
@@ -493,6 +530,7 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.startHeaderTicker()
 
 	v.streamDead = false
+	v.autoScroll = true
 	v.textView.Clear()
 	_, _ = fmt.Fprintln(v.textView, "[::d]Connecting to log stream...[-:-:-]")
 
@@ -598,7 +636,9 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 				colored := colorizeLogChunk(remaining)
 				v.app.QueueUpdateDraw(func() {
 					_, _ = fmt.Fprint(v.textView, colored)
-					v.textView.ScrollToEnd()
+					if v.autoScroll {
+						v.textView.ScrollToEnd()
+					}
 				})
 			}
 			return true
@@ -611,7 +651,9 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 				colored := colorizeLogChunk(chunk)
 				v.app.QueueUpdateDraw(func() {
 					_, _ = fmt.Fprint(v.textView, colored)
-					v.textView.ScrollToEnd()
+					if v.autoScroll {
+						v.textView.ScrollToEnd()
+					}
 				})
 			}
 		}
