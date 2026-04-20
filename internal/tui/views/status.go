@@ -475,12 +475,22 @@ func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 	if uuid == "" {
 		uuid = job.UUID
 	}
+	startTime := ""
+	if s := job.StartTime.String(); s != "" && s != "0" {
+		var sec float64
+		if _, err := fmt.Sscanf(s, "%f", &sec); err == nil && sec > 0 {
+			startTime = time.Unix(int64(sec), 0).Format(time.RFC3339)
+		}
+	}
+	changeID := sr.item.ChangeID()
 	build := &api.Build{
-		UUID:    uuid,
-		JobName: job.Name,
+		UUID:      uuid,
+		JobName:   job.Name,
+		StartTime: startTime,
 		Ref: api.BuildRef{
 			Project: project,
-			Branch:  sr.item.ChangeID(),
+			Change:  changeID,
+			Branch:  changeID,
 			RefURL:  sr.item.ChangeURL(),
 		},
 	}

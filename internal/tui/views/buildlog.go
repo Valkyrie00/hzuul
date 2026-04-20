@@ -39,6 +39,8 @@ type BuildLogView struct {
 	inputActive    bool
 	dequeuePending bool
 	streamDead     bool
+	headerTicker   *time.Ticker
+	streamStart    time.Time
 
 	jobOutput   []api.PlaybookOutput
 	failedTasks []api.FailedTask
@@ -310,6 +312,85 @@ func (v *BuildLogView) executeDequeue() {
 	}()
 }
 
+func (v *BuildLogView) bookmarkTag() string {
+	if v.bmManager != nil && v.build != nil && v.bmManager.IsBookmarked(v.build.UUID) {
+		return " │ [yellow]★ saved[-]"
+	}
+	return ""
+}
+
+func (v *BuildLogView) headerElapsed() string {
+	start := v.streamStart
+	if v.build != nil && v.build.StartTime != "" {
+		for _, layout := range []string{
+			time.RFC3339,
+			"2006-01-02T15:04:05",
+			"2006-01-02T15:04:05.000000",
+		} {
+			if t, err := time.Parse(layout, v.build.StartTime); err == nil {
+				start = t
+				break
+			}
+		}
+	}
+	if start.IsZero() {
+		return ""
+	}
+	d := time.Since(start)
+	if d < 0 {
+		return ""
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("[green::b]%dh %02dm %02ds[-:-:-]", h, m, s)
+	}
+	return fmt.Sprintf("[green::b]%dm %02ds[-:-:-]", m, s)
+}
+
+func (v *BuildLogView) headerRefInfo() string {
+	b := v.build
+	if b.Ref.Change != nil {
+		return fmt.Sprintf("#%v", b.Ref.Change)
+	}
+	return b.Ref.Branch
+}
+
+func (v *BuildLogView) renderHeader() {
+	if v.build == nil {
+		return
+	}
+	v.header.Clear()
+	elapsed := v.headerElapsed()
+	bookmark := v.bookmarkTag()
+	elapsedPart := ""
+	if elapsed != "" {
+		elapsedPart = " │ " + elapsed
+	}
+	_, _ = fmt.Fprintf(v.header, "[bold]Stream[-] │ [#3884f4]%s[-] │ %s │ %s%s%s",
+		v.build.JobName, v.build.Ref.Project, v.headerRefInfo(), elapsedPart, bookmark)
+}
+
+func (v *BuildLogView) startHeaderTicker() {
+	v.stopHeaderTicker()
+	v.headerTicker = time.NewTicker(1 * time.Second)
+	go func() {
+		for range v.headerTicker.C {
+			v.app.QueueUpdateDraw(func() {
+				v.renderHeader()
+			})
+		}
+	}()
+}
+
+func (v *BuildLogView) stopHeaderTicker() {
+	if v.headerTicker != nil {
+		v.headerTicker.Stop()
+		v.headerTicker = nil
+	}
+}
+
 func (v *BuildLogView) updateBookmarkHeader(added bool) {
 	if v.build == nil {
 		return
@@ -321,15 +402,7 @@ func (v *BuildLogView) updateBookmarkHeader(added bool) {
 		}
 		return
 	}
-	bookmark := ""
-	if added {
-		bookmark = " [yellow]*BOOKMARKED*[-]"
-	} else if v.bmManager != nil && v.bmManager.IsBookmarked(v.build.UUID) {
-		bookmark = " [yellow]*BOOKMARKED*[-]"
-	}
-	v.header.Clear()
-	_, _ = fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
-		v.build.JobName, v.build.Ref.Project, v.build.Ref.Branch, bookmark)
+	v.renderHeader()
 }
 
 func (v *BuildLogView) defaultDownloadDir() string {
@@ -415,13 +488,9 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.buildLayout.AddItem(v.contentFlex, 0, 1, true)
 	v.buildLayout.AddItem(v.keys, 1, 0, false)
 
-	bookmark := ""
-	if v.bmManager != nil && v.bmManager.IsBookmarked(build.UUID) {
-		bookmark = " [yellow]*BOOKMARKED*[-]"
-	}
-	v.header.Clear()
-	_, _ = fmt.Fprintf(v.header, " [bold]Log[-] │ [#3884f4]%s[-] │ %s │ %s%s",
-		build.JobName, build.Ref.Project, build.Ref.Branch, bookmark)
+	v.streamStart = time.Now()
+	v.renderHeader()
+	v.startHeaderTicker()
 
 	v.streamDead = false
 	v.textView.Clear()
@@ -484,6 +553,7 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 		}
 	}
 
+	v.stopHeaderTicker()
 	v.app.QueueUpdateDraw(func() {
 		v.streamDead = true
 		_, _ = fmt.Fprintf(v.textView, "\n[red::b]Stream lost after %d retries[-:-:-]\n", maxRetries)
@@ -966,6 +1036,8 @@ func (v *BuildLogView) startAnalysis() {
 }
 
 func (v *BuildLogView) Stop() {
+	v.stopHeaderTicker()
+
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
