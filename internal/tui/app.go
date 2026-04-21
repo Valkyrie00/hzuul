@@ -9,6 +9,7 @@ import (
 	"github.com/Valkyrie00/hzuul/internal/api"
 	"github.com/Valkyrie00/hzuul/internal/config"
 	"github.com/Valkyrie00/hzuul/internal/tui/views"
+	"github.com/Valkyrie00/hzuul/internal/updater"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -36,6 +37,7 @@ type App struct {
 	client          *api.Client
 	cfg             *config.Config
 	version         string
+	latestVersion   string
 	views           []views.View
 	dlManager       *views.DownloadManager
 	bmManager       *views.BookmarkManager
@@ -113,6 +115,7 @@ func New(cfg *config.Config, version string) (*App, error) {
 	a.app.SetInputCapture(a.globalInput)
 
 	go a.initClient(ctx, loadingText)
+	go a.checkForUpdates()
 
 	return a, nil
 }
@@ -167,9 +170,34 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 	tv.SetBackgroundColor(views.ColorHeaderBg)
-	_, _ = fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
-		strings.ToUpper(a.version), ctx.URL, ctx.Tenant, a.cfg.CurrentContext, a.aiLabel())
+	a.writeHeader(tv, ctx)
 	return tv
+}
+
+func (a *App) writeHeader(tv *tview.TextView, ctx *config.Context) {
+	tv.Clear()
+	versionBadge := fmt.Sprintf("[::d]%s", strings.ToUpper(a.version))
+	if a.latestVersion != "" {
+		versionBadge += fmt.Sprintf(" [yellow](%s ![-:-:-][yellow])[-:-:-]", a.latestVersion)
+	}
+	versionBadge += "[-:-:-]"
+	_, _ = fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] %s [::d]│[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
+		versionBadge, ctx.URL, ctx.Tenant, a.cfg.CurrentContext, a.aiLabel())
+}
+
+func (a *App) checkForUpdates() {
+	res, err := updater.Check(a.version)
+	if err != nil || !res.Available {
+		return
+	}
+	ctx, err := a.cfg.Active()
+	if err != nil {
+		return
+	}
+	a.app.QueueUpdateDraw(func() {
+		a.latestVersion = res.Latest
+		a.writeHeader(a.header, ctx)
+	})
 }
 
 func (a *App) buildFooter() {
@@ -539,10 +567,8 @@ func (a *App) showTenantPicker() {
 				}
 				list.AddItem(prefix+name, "", 0, func() {
 					a.client.SetTenant(name)
-					a.header.Clear()
 					ctx, _ := a.cfg.Active()
-					_, _ = fmt.Fprintf(a.header, " [#3884F4::b]HZUUL[-:-:-] [::d]%s │[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
-						strings.ToUpper(a.version), ctx.URL, name, a.cfg.CurrentContext, a.aiLabel())
+					a.writeHeader(a.header, ctx)
 					a.dismissModal("tenants")
 					a.resetAllViews()
 					idx := a.nav.Active()
