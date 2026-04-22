@@ -33,7 +33,7 @@ type StatusView struct {
 	table              *tview.Table
 	logView            *BuildLogView
 	pages              *tview.Pages
-	keys               *tview.TextView
+	keyBar             *KeyBar
 	app                *tview.Application
 	client             *api.Client
 	rowMap             map[int]rowEntry
@@ -47,7 +47,7 @@ type StatusView struct {
 	onLog              bool
 }
 
-func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *StatusView {
+func NewStatusView(app *tview.Application, keyBar *KeyBar, dlManager *DownloadManager, aiCfg config.AIConfig) *StatusView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -55,20 +55,15 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 	table.SetSelectedStyle(tcell.StyleDefault.
 		Background(ColorSelectBg))
 
-	logView := NewBuildLogView(app, dlManager, aiCfg)
-	keys := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	logView := NewBuildLogView(app, keyBar, dlManager, aiCfg)
 
-	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(ColorBg)
+		AddItem(NewSpacer(), 1, 0, false)
+	tablePage.SetBackgroundColor(ColorBg)
 
 	pages := tview.NewPages().
-		AddPage("table", tableWithKeys, true, true).
+		AddPage("table", tablePage, true, true).
 		AddPage("log", logView.Root(), true, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -80,7 +75,7 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 		table:              table,
 		logView:            logView,
 		pages:              pages,
-		keys:               keys,
+		keyBar:             keyBar,
 		app:                app,
 		rowMap:             make(map[int]rowEntry),
 		expanded:           make(map[int]bool),
@@ -188,15 +183,37 @@ func NewStatusView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 	logView.SetBackHandler(func() {
 		v.onLog = false
 		v.pages.SwitchToPage("table")
+		v.updateKeys()
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", len(v.rows)))
 	})
 
 	return v
 }
 
 func (v *StatusView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *StatusView) Root() tview.Primitive                  { return v.root }
+func (v *StatusView) Root() tview.Primitive { return v.root }
+func (v *StatusView) UpdateStatus() {
+	if !v.onLog {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", len(v.rows)))
+	}
+}
 
-func (v *StatusView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *StatusView) KeyHints() []KeyHint {
+	if v.onLog {
+		return v.logView.KeyHints()
+	}
+	if v.pendingAction != "" {
+		return nil
+	}
+	hints := []KeyHint{HintExpand, HintOpenWeb, HintOpenChange}
+	if v.client != nil && v.client.HasAdminToken() {
+		hints = append(hints, HintDequeue, HintPromote)
+	}
+	hints = append(hints, HintFilter)
+	return hints
+}
+
+func (v *StatusView) IsModal() bool          { return v.logView.IsAnalysisActive() || v.logView.IsInputActive() }
 func (v *StatusView) IsLiveFilterable() bool { return true }
 func (v *StatusView) CanReconnect() bool     { return v.onLog && v.logView.CanReconnect() }
 func (v *StatusView) Reconnect()             { v.logView.Reconnect() }
@@ -216,7 +233,7 @@ func (v *StatusView) Load(client *api.Client) {
 	if v.status == nil {
 		v.table.Clear()
 		v.setStatusHeader()
-		v.table.SetCell(1, 0, tview.NewTableCell(" [yellow]Loading...[-]").SetSelectable(false).SetExpansion(1))
+		v.table.SetCell(1, 0, tview.NewTableCell(" [yellow]Loading...[-]").SetExpansion(1))
 	}
 
 	go func() {
@@ -464,6 +481,9 @@ func (v *StatusView) rebuildTable() {
 	} else if tableRow == 1 && v.filter != "" {
 		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetExpansion(1))
 	}
+	if !v.onLog {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", len(v.rows)))
+	}
 }
 
 func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
@@ -495,6 +515,7 @@ func (v *StatusView) streamJobLog(sr statusRow, job api.JobStatus) {
 		},
 	}
 	v.onLog = true
+	v.keyBar.ClearStatus()
 	v.logView.StreamBuild(v.client, build)
 	v.pages.SwitchToPage("log")
 }
@@ -510,6 +531,7 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 		job.Name, project, sr.item.ChangeID())
 
 	v.onLog = true
+	v.keyBar.ClearStatus()
 	v.logView.textView.Clear()
 	_, _ = fmt.Fprintln(v.logView.textView, "[::d]Loading build detail...[-]")
 	v.pages.SwitchToPage("log")
@@ -534,7 +556,6 @@ func (v *StatusView) showBuildDetail(sr statusRow, job api.JobStatus) {
 }
 
 func (v *StatusView) updateKeys() {
-	v.keys.Clear()
 	if v.pendingAction != "" {
 		sr := v.rows[v.pendingRowIdx]
 		project := sr.item.ProjectName()
@@ -544,20 +565,15 @@ func (v *StatusView) updateKeys() {
 		changeID := sr.item.ChangeID()
 		switch v.pendingAction {
 		case "dequeue":
-			_, _ = fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]#%s from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
-				truncate(project, 30), changeID, sr.pipeline)
+			v.keyBar.SetMessage(fmt.Sprintf("[red::b]Dequeue[-:-:-] [white]%s #%s from %s?[-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]",
+				project, changeID, sr.pipeline))
 		case "promote":
-			_, _ = fmt.Fprintf(v.keys, " [yellow::b]Promote[-:-:-] [white]#%s[-] [::d]to top of %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
-				changeID, sr.pipeline)
+			v.keyBar.SetMessage(fmt.Sprintf("[green::b]Promote[-:-:-] [white]#%s to top of %s?[-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]",
+				changeID, sr.pipeline))
 		}
 		return
 	}
-	base := " [#3884f4]enter[-:-:-][::d]:expand/open[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]"
-	if v.client != nil && v.client.HasAdminToken() {
-		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]  [#3884f4]p[-:-:-][::d]:promote[-:-:-]"
-	}
-	base += "  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]"
-	_, _ = fmt.Fprint(v.keys, base)
+	v.keyBar.SetHints(v.KeyHints())
 }
 
 func (v *StatusView) confirmDequeue() {
@@ -596,12 +612,11 @@ func (v *StatusView) cancelAdminAction() {
 func (v *StatusView) executeAdminAction() {
 	sr := v.rows[v.pendingRowIdx]
 	action := v.pendingAction
-	v.keys.Clear()
 	switch action {
 	case "dequeue":
-		_, _ = fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+		v.keyBar.SetMessage("[yellow::b]Dequeuing...[-:-:-]")
 	case "promote":
-		_, _ = fmt.Fprint(v.keys, " [yellow::b]Promoting...[-:-:-]")
+		v.keyBar.SetMessage("[green::b]Promoting...[-:-:-]")
 	}
 
 	project := sr.item.ProjectName()
@@ -636,8 +651,7 @@ func (v *StatusView) executeAdminAction() {
 		v.app.QueueUpdateDraw(func() {
 			v.pendingAction = ""
 			if err != nil {
-				v.keys.Clear()
-				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				v.keyBar.SetMessage(fmt.Sprintf("[red]Error: %v[-]", err))
 				return
 			}
 			v.updateKeys()

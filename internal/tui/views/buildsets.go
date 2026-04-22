@@ -13,7 +13,7 @@ import (
 type BuildsetsView struct {
 	root         *tview.Flex
 	table        *tview.Table
-	countLabel   *tview.TextView
+	keyBar       *KeyBar
 	pages        *tview.Pages
 	detailFlex   *tview.Flex
 	detailHead   *tview.TextView
@@ -32,7 +32,7 @@ type BuildsetsView struct {
 	onLog        bool
 }
 
-func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildsetsView {
+func NewBuildsetsView(app *tview.Application, keyBar *KeyBar, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildsetsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
@@ -56,38 +56,22 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 	sep.SetTextColor(ColorSep)
 	_, _ = fmt.Fprint(sep, "  ──────────────────────────────────────")
 
-	detailKeys := tview.NewTextView().SetDynamicColors(true)
-	detailKeys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(detailKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
 	detailFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHead, 0, 0, false).
 		AddItem(sep, 1, 0, false).
 		AddItem(detailTbl, 0, 1, true).
-		AddItem(detailKeys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	detailFlex.SetBackgroundColor(ColorBg)
 
-	countLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
-	countLabel.SetBackgroundColor(ColorBg)
-
-	tableKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	tableKeys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(tableKeys, " [#3884f4]enter[-:-:-][::d]:buildset detail[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
-	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(tableKeys, 0, 1, false).
-		AddItem(countLabel, 20, 0, false)
-	keysRow.SetBackgroundColor(ColorNavBg)
-
-	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keysRow, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(ColorBg)
+		AddItem(NewSpacer(), 1, 0, false)
+	tablePage.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app, dlManager, aiCfg)
+	logView := NewBuildLogView(app, keyBar, dlManager, aiCfg)
 
 	pages := tview.NewPages().
-		AddPage("table", tableWithKeys, true, true).
+		AddPage("table", tablePage, true, true).
 		AddPage("detail", detailFlex, true, false).
 		AddPage("log", logView.Root(), true, false)
 
@@ -98,7 +82,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 	v := &BuildsetsView{
 		root:       root,
 		table:      table,
-		countLabel: countLabel,
+		keyBar:     keyBar,
 		pages:      pages,
 		detailFlex: detailFlex,
 		detailHead: detailHead,
@@ -122,6 +106,7 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 		if idx < 0 || idx >= len(v.buildsets) {
 			return
 		}
+		v.keyBar.ClearStatus()
 		v.showDetail(v.buildsets[idx])
 	})
 
@@ -145,6 +130,8 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 			v.onDetail = false
 			v.pages.SwitchToPage("table")
 			v.app.SetFocus(v.table)
+			v.keyBar.SetHints(v.KeyHints())
+			v.updateCount()
 			return nil
 		}
 		idx := func() int {
@@ -162,15 +149,31 @@ func NewBuildsetsView(app *tview.Application, dlManager *DownloadManager, aiCfg 
 		v.pages.SwitchToPage("detail")
 		v.onLog = false
 		v.app.SetFocus(v.detailTbl)
+		v.keyBar.SetHints(v.KeyHints())
 	})
 
 	return v
 }
 
 func (v *BuildsetsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *BuildsetsView) Root() tview.Primitive                  { return v.root }
+func (v *BuildsetsView) Root() tview.Primitive { return v.root }
+func (v *BuildsetsView) UpdateStatus() {
+	if !v.onDetail && !v.onLog {
+		v.updateCount()
+	}
+}
 
-func (v *BuildsetsView) IsModal() bool      { return v.logView.IsAnalysisActive() }
+func (v *BuildsetsView) KeyHints() []KeyHint {
+	if v.onLog {
+		return v.logView.KeyHints()
+	}
+	if v.onDetail {
+		return []KeyHint{HintEnter, HintOpenWeb, HintOpenChange, HintBack}
+	}
+	return []KeyHint{HintDetail, HintFilter}
+}
+
+func (v *BuildsetsView) IsModal() bool      { return v.logView.IsAnalysisActive() || v.logView.IsInputActive() }
 func (v *BuildsetsView) CanReconnect() bool { return v.logView.CanReconnect() }
 func (v *BuildsetsView) Reconnect()         { v.logView.Reconnect() }
 
@@ -182,8 +185,7 @@ func (v *BuildsetsView) SetFilter(term string) {
 	v.curFilter = parseBuildsetFilter(term)
 	v.skip = 0
 	v.noMore = false
-	v.countLabel.Clear()
-	_, _ = fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
+	v.keyBar.SetStatus("[yellow::b]Searching...[-:-:-]")
 	v.searchServer()
 }
 
@@ -192,12 +194,17 @@ func (v *BuildsetsView) Load(client *api.Client) {
 	if v.onDetail || v.onLog {
 		return
 	}
+	isRefresh := len(v.buildsets) > 0
 	if v.filter == "" {
 		v.curFilter = api.BuildFilter{Limit: defaultPageSize}
 	}
-	v.skip = 0
-	v.noMore = false
-	v.searchServer()
+	if isRefresh {
+		v.refreshInPlace()
+	} else {
+		v.skip = 0
+		v.noMore = false
+		v.searchServer()
+	}
 }
 
 func (v *BuildsetsView) searchServer() {
@@ -207,7 +214,6 @@ func (v *BuildsetsView) searchServer() {
 	v.loading = true
 	f := v.curFilter
 	f.Skip = 0
-	firstLoad := len(v.buildsets) == 0
 
 	go func() {
 		buildsets, err := v.client.GetBuildsets(&f)
@@ -224,21 +230,63 @@ func (v *BuildsetsView) searchServer() {
 			v.noMore = len(buildsets) < defaultPageSize
 			v.renderRows(0)
 			v.updateCount()
-			if firstLoad {
-				v.table.Select(1, 0)
-				v.table.ScrollToBeginning()
+			if len(buildsets) == 0 {
+				v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No results[-:-:-]").SetExpansion(1))
 			}
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
+		})
+	}()
+}
+
+func (v *BuildsetsView) refreshInPlace() {
+	if v.loading || v.client == nil {
+		return
+	}
+	v.loading = true
+	f := v.curFilter
+	f.Skip = 0
+	if v.skip > f.Limit {
+		f.Limit = v.skip
+	}
+	sel, _ := v.table.GetSelection()
+
+	go func() {
+		buildsets, err := v.client.GetBuildsets(&f)
+		v.app.QueueUpdateDraw(func() {
+			v.loading = false
+			if err != nil {
+				return
+			}
+			v.table.Clear()
+			setBuildsetHeader(v.table)
+			v.buildsets = buildsets
+			v.skip = len(buildsets)
+			v.noMore = len(buildsets) < f.Limit
+			v.renderRows(0)
+			v.updateCount()
+			if len(buildsets) == 0 {
+				v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No results[-:-:-]").SetExpansion(1))
+				v.table.Select(1, 0)
+				return
+			}
+			if sel >= v.table.GetRowCount() {
+				sel = v.table.GetRowCount() - 1
+			}
+			if sel < 1 {
+				sel = 1
+			}
+			v.table.Select(sel, 0)
 		})
 	}()
 }
 
 func (v *BuildsetsView) updateCount() {
-	v.countLabel.Clear()
 	suffix := ""
 	if !v.noMore {
 		suffix = "+"
 	}
-	_, _ = fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.buildsets), suffix)
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d%s items[-:-:-]", len(v.buildsets), suffix))
 }
 
 func (v *BuildsetsView) loadMore() {
@@ -347,7 +395,7 @@ func (v *BuildsetsView) showDetail(bs api.Buildset) {
 				v.detailTbl.SetCell(row, 3, tview.NewTableCell(" "+voting).SetTextColor(muted))
 			}
 			if len(full.Builds) == 0 {
-				v.detailTbl.SetCell(1, 0, tview.NewTableCell(" [::d]No builds in this buildset[-]").SetSelectable(false))
+				v.detailTbl.SetCell(1, 0, tview.NewTableCell(" [::d]No builds in this buildset[-]").SetExpansion(1))
 			}
 			v.detailTbl.Select(1, 0)
 			v.app.SetFocus(v.detailTbl)
@@ -402,6 +450,6 @@ func (v *BuildsetsView) renderRows(fromIdx int) {
 		row++
 	}
 	if len(v.buildsets) == 0 && v.filter != "" {
-		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No results for '%s'[-]", v.filter)).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No results for '%s'[-]", v.filter)).SetExpansion(1))
 	}
 }

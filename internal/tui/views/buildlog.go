@@ -18,9 +18,9 @@ type BuildLogView struct {
 	textView     *tview.TextView
 	header       *tview.TextView
 	separator    *tview.TextView
-	keys         *tview.TextView
 	pathInput    *tview.InputField
 	app          *tview.Application
+	keyBar       *KeyBar
 	streamer     *api.LogStreamer
 	mu           sync.Mutex
 	stopCh       chan struct{}
@@ -51,7 +51,7 @@ type BuildLogView struct {
 	analysis    *AnalysisPanel
 }
 
-func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildLogView {
+func NewBuildLogView(app *tview.Application, keyBar *KeyBar, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildLogView {
 	bg := ColorBg
 	dimColor := ColorSep
 
@@ -75,16 +75,9 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	textView.SetBackgroundColor(bg)
 	textView.SetBorderPadding(0, 0, 2, 2)
 
-	navBg := ColorNavBg
-	keys := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(navBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
-
 	pathInput := tview.NewInputField()
-	pathInput.SetBackgroundColor(navBg)
-	pathInput.SetFieldBackgroundColor(navBg)
+	pathInput.SetBackgroundColor(ColorNavBg)
+	pathInput.SetFieldBackgroundColor(ColorNavBg)
 	pathInput.SetFieldTextColor(tcell.ColorWhite)
 	pathInput.SetLabelColor(ColorAccent)
 	pathInput.SetLabel(" Download to: ")
@@ -104,8 +97,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	buildLayout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
 		AddItem(separator, 1, 0, false).
-		AddItem(contentFlex, 0, 1, true).
-		AddItem(keys, 1, 0, false)
+		AddItem(contentFlex, 0, 1, true)
 	buildLayout.SetBackgroundColor(bg)
 
 	panel := NewAnalysisPanel(app, aiCfg)
@@ -126,9 +118,9 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		errorsHeader: errorsHeader,
 		header:       header,
 		separator:    separator,
-		keys:         keys,
 		pathInput:    pathInput,
 		app:          app,
+		keyBar:       keyBar,
 		dlManager:    dlManager,
 		pages:        pages,
 		buildLayout:  buildLayout,
@@ -171,6 +163,7 @@ func NewBuildLogView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 func (v *BuildLogView) Root() tview.Primitive { return v.root }
 
 func (v *BuildLogView) IsAnalysisActive() bool { return v.analysis.IsActive() }
+func (v *BuildLogView) IsInputActive() bool    { return v.inputActive }
 
 func (v *BuildLogView) CanReconnect() bool {
 	return !v.isStatic && v.streamDead && v.client != nil && v.build != nil
@@ -182,40 +175,44 @@ func (v *BuildLogView) Reconnect() {
 	}
 }
 
-func (v *BuildLogView) updateKeys() {
-	v.keys.Clear()
-	if v.dequeuePending && v.build != nil {
-		_, _ = fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
-			truncate(v.build.JobName, 30), v.build.Pipeline)
-		return
+func (v *BuildLogView) KeyHints() []KeyHint {
+	if v.analysis.IsActive() {
+		return v.analysis.KeyHints()
+	}
+	if v.dequeuePending {
+		return nil
 	}
 	if v.isStatic {
-		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]d[-:-:-][::d]:download[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]l[-:-:-][::d]:open logs[-:-:-]"
+		hints := []KeyHint{HintBack, HintBookmark, HintDownload, HintOpenChange, HintOpenWeb, HintOpenLogs}
 		if v.build != nil && v.build.Result != "SUCCESS" && v.build.Result != "SKIPPED" {
-			base += "  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]"
+			hints = append(hints, HintAI)
 		}
-		base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
-		_, _ = fmt.Fprint(v.keys, base)
-	} else {
-		base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]s[-:-:-][::d]:toggle bookmark[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]"
-		if v.streamDead {
-			base += "  [yellow]r[-:-:-][::d]:reconnect[-:-:-]"
-		}
-		if v.client != nil && v.client.HasAdminToken() {
-			base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
-		}
-		if !v.autoScroll {
-			base += "  [yellow]⏸ scroll paused[-:-:-]  [#3884f4]End[-:-:-][::d]:resume[-:-:-]"
-		} else {
-			base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
-		}
-		_, _ = fmt.Fprint(v.keys, base)
+		return hints
 	}
+	hints := []KeyHint{HintBack, HintBookmark, HintOpenChange, HintOpenWeb}
+	if v.streamDead {
+		hints = append(hints, HintReconnect)
+	}
+	if v.client != nil && v.client.HasAdminToken() {
+		hints = append(hints, HintDequeue)
+	}
+	if !v.autoScroll {
+		hints = append(hints, KeyHint{"⏸", "scroll paused", "yellow"}, KeyHint{"End", "resume", ""})
+	}
+	return hints
+}
+
+func (v *BuildLogView) updateKeys() {
+	if v.dequeuePending && v.build != nil {
+		v.keyBar.SetMessage(fmt.Sprintf("[red::b]Dequeue[-:-:-] [white]%s from %s?[-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]",
+			v.build.JobName, v.build.Pipeline))
+		return
+	}
+	v.keyBar.SetHints(v.KeyHints())
 }
 
 func (v *BuildLogView) flashKeys(msg string) {
-	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " "+msg)
+	v.keyBar.SetMessage(msg)
 	go func() {
 		time.Sleep(2 * time.Second)
 		v.app.QueueUpdateDraw(func() {
@@ -233,6 +230,9 @@ func (v *BuildLogView) Load(_ *api.Client) {}
 func (v *BuildLogView) SetBackHandler(onBack func()) {
 	v.onBack = onBack
 
+	v.analysis.SetOnKeysChanged(func() {
+		v.updateKeys()
+	})
 	v.analysis.SetOnExit(func() {
 		v.pages.SwitchToPage("build")
 		v.app.SetFocus(v.textView)
@@ -321,8 +321,7 @@ func (v *BuildLogView) executeDequeue() {
 	if v.build == nil || v.client == nil {
 		return
 	}
-	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+	v.keyBar.SetMessage("[yellow::b]Dequeuing...[-:-:-]")
 
 	build := v.build
 	go func() {
@@ -339,12 +338,10 @@ func (v *BuildLogView) executeDequeue() {
 		v.app.QueueUpdateDraw(func() {
 			v.dequeuePending = false
 			if err != nil {
-				v.keys.Clear()
-				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				v.keyBar.SetMessage(fmt.Sprintf("[red]Error: %v[-]", err))
 				return
 			}
-			v.keys.Clear()
-			_, _ = fmt.Fprint(v.keys, " [green]Dequeued successfully[-]")
+			v.keyBar.SetMessage("[green]Dequeued successfully[-]")
 		})
 	}()
 }
@@ -474,7 +471,6 @@ func (v *BuildLogView) showPathPrompt() {
 		}
 	})
 
-	v.buildLayout.RemoveItem(v.keys)
 	v.buildLayout.AddItem(v.pathInput, 1, 0, true)
 	v.app.SetFocus(v.pathInput)
 }
@@ -482,8 +478,8 @@ func (v *BuildLogView) showPathPrompt() {
 func (v *BuildLogView) hidePathPrompt() {
 	v.inputActive = false
 	v.buildLayout.RemoveItem(v.pathInput)
-	v.buildLayout.AddItem(v.keys, 1, 0, false)
 	v.app.SetFocus(v.textView)
+	v.updateKeys()
 }
 
 func (v *BuildLogView) startDownload(destDir string) {
@@ -515,15 +511,12 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 	v.contentFlex.Clear()
 	v.contentFlex.AddItem(v.textView, 0, 1, true)
 
-	// Restore header + separator for Log streaming view
 	v.buildLayout.RemoveItem(v.header)
 	v.buildLayout.RemoveItem(v.separator)
 	v.buildLayout.RemoveItem(v.contentFlex)
-	v.buildLayout.RemoveItem(v.keys)
 	v.buildLayout.AddItem(v.header, 1, 0, false)
 	v.buildLayout.AddItem(v.separator, 1, 0, false)
 	v.buildLayout.AddItem(v.contentFlex, 0, 1, true)
-	v.buildLayout.AddItem(v.keys, 1, 0, false)
 
 	v.streamStart = time.Now()
 	v.renderHeader()

@@ -12,30 +12,38 @@ type NodesView struct {
 	root   *tview.Flex
 	table  *tview.Table
 	app    *tview.Application
+	keyBar *KeyBar
 	nodes  []api.Node
 	filter string
 }
 
-func NewNodesView(app *tview.Application) *NodesView {
+func NewNodesView(app *tview.Application, keyBar *KeyBar) *NodesView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	root.SetBackgroundColor(ColorBg)
 
-	return &NodesView{root: root, table: table, app: app}
+	return &NodesView{root: root, table: table, app: app, keyBar: keyBar}
 }
 
-func (v *NodesView) Root() tview.Primitive  { return v.root }
+func (v *NodesView) KeyHints() []KeyHint {
+	return []KeyHint{HintFilter}
+}
+
+func (v *NodesView) Root() tview.Primitive { return v.root }
+func (v *NodesView) UpdateStatus() {
+	if n := v.table.GetRowCount() - 1; n > 0 {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", n))
+	} else {
+		v.keyBar.ClearStatus()
+	}
+}
 func (v *NodesView) IsLiveFilterable() bool { return true }
 
 func (v *NodesView) SetFilter(term string) {
@@ -46,6 +54,7 @@ func (v *NodesView) SetFilter(term string) {
 
 func (v *NodesView) Load(client *api.Client) {
 	firstLoad := len(v.nodes) == 0
+	sel, _ := v.table.GetSelection()
 
 	go func() {
 		nodes, err := client.GetNodes()
@@ -61,6 +70,14 @@ func (v *NodesView) Load(client *api.Client) {
 			if firstLoad {
 				v.table.Select(1, 0)
 				v.table.ScrollToBeginning()
+			} else {
+				if sel >= v.table.GetRowCount() {
+					sel = v.table.GetRowCount() - 1
+				}
+				if sel < 1 {
+					sel = 1
+				}
+				v.table.Select(sel, 0)
 			}
 		})
 	}()
@@ -89,8 +106,9 @@ func (v *NodesView) renderTable() {
 		if v.filter != "" {
 			msg = fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)
 		}
-		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetExpansion(1))
 	}
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", row-1))
 }
 
 func stateCell(state string) *tview.TableCell {

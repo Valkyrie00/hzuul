@@ -30,6 +30,20 @@ type Reconnectable interface {
 	Reconnect()
 }
 
+// KeyHintProvider is implemented by views that declare their key hints
+// to the unified KeyBar. KeyHints returns view-specific hints for the
+// current state; the app appends global hints automatically.
+// Return nil when the view manages the KeyBar directly (e.g. confirm prompts).
+type KeyHintProvider interface {
+	KeyHints() []KeyHint
+}
+
+// StatusUpdater is implemented by views that display a count or status
+// in the KeyBar. Called whenever the view becomes active.
+type StatusUpdater interface {
+	UpdateStatus()
+}
+
 // BookmarkAwareView can be implemented by views that contain a BuildLogView
 // and need the BookmarkManager injected after construction.
 type BookmarkAwareView interface {

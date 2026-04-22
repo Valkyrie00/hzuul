@@ -26,9 +26,7 @@ type App struct {
 	pages           *tview.Pages
 	nav             *NavBar
 	header          *tview.TextView
-	footer          *tview.Flex
-	footerKeys      *tview.TextView
-	footerTime      *tview.TextView
+	keyBar          *views.KeyBar
 	filterText      string
 	filterPos       int
 	filterOpen      bool
@@ -79,9 +77,17 @@ func New(cfg *config.Config, version string) (*App, error) {
 	a.dlManager = views.NewDownloadManager(a.app)
 	a.bmManager = views.NewBookmarkManager()
 	a.header = a.buildHeader(ctx)
-	a.buildFooter()
+	a.keyBar = views.NewKeyBar()
+	a.keyBar.SetGlobalHints(views.GlobalHints())
+	a.keyBar.SetHints(nil)
 	a.nav = NewNavBar(a.switchView)
 	a.views = a.buildViews()
+
+	a.bmManager.SetOnChange(func() {
+		if su, ok := a.views[a.nav.Active()].(views.StatusUpdater); ok {
+			su.UpdateStatus()
+		}
+	})
 
 	a.dlManager.SetOnChange(func() {
 		count := a.dlManager.ActiveDownloadCount()
@@ -90,6 +96,10 @@ func New(cfg *config.Config, version string) (*App, error) {
 		} else {
 			a.nav.SetBadge(9, "")
 		}
+		if su, ok := a.views[a.nav.Active()].(views.StatusUpdater); ok {
+			su.UpdateStatus()
+		}
+		a.updateDownloadProgress()
 	})
 
 	for i, v := range a.views {
@@ -109,7 +119,7 @@ func New(cfg *config.Config, version string) (*App, error) {
 		AddItem(a.nav, 1, 0, false).
 		AddItem(navSpacer, 1, 0, false).
 		AddItem(a.pages, 0, 1, true).
-		AddItem(a.footer, 1, 0, false)
+		AddItem(a.keyBar.Root(), 1, 0, false)
 
 	a.app.SetRoot(layout, true)
 	a.app.SetInputCapture(a.globalInput)
@@ -143,6 +153,7 @@ func (a *App) initClient(ctx *config.Context, loadingText *tview.TextView) {
 		a.pages.SwitchToPage(tabNames[0])
 		a.views[0].Load(a.client)
 		a.viewLoaded[0] = true
+		a.renderKeyBar()
 		a.updateFooterTime()
 		go a.autoRefresh()
 	})
@@ -200,33 +211,9 @@ func (a *App) checkForUpdates() {
 	})
 }
 
-func (a *App) buildFooter() {
-	keys := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(views.ColorNavBg)
-
-	ts := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignRight)
-	ts.SetBackgroundColor(views.ColorNavBg)
-
-	a.footerKeys = keys
-	a.footerTime = ts
-	a.updateFooterKeysText()
-
-	a.footer = tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(keys, 0, 1, false).
-		AddItem(ts, 22, 0, false)
-	a.footer.SetBackgroundColor(views.ColorNavBg)
-}
-
-const footerKeysBase = " [#3884f4]?[-:-:-][::d]:help[-:-:-]  [#3884f4]t[-:-:-][::d]:tenant[-:-:-]  [#3884f4]r[-:-:-][::d]:refresh[-:-:-]  [#3884f4]1-9[-:-:-][::d]:views[-:-:-]  [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]q[-:-:-][::d]:quit[-:-:-]"
-
-func (a *App) updateFooterKeysText() {
-	a.footerKeys.Clear()
+func (a *App) renderKeyBar() {
 	if a.quitPending {
-		_, _ = fmt.Fprint(a.footerKeys, " [yellow::b]Quit HZUUL?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]")
+		a.keyBar.SetMessage("[yellow::b]Quit HZUUL?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]")
 		return
 	}
 	if a.filterOpen {
@@ -238,11 +225,22 @@ func (a *App) updateFooterKeysText() {
 			cursor = string(runes[a.filterPos])
 			after = string(runes[a.filterPos+1:])
 		}
-		_, _ = fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after)
-	} else if a.filterText != "" {
-		_, _ = fmt.Fprintf(a.footerKeys, " [#3884f4]/[-][white]%s[-]  %s", a.filterText, footerKeysBase[1:])
+		a.keyBar.SetMessage(fmt.Sprintf("[#3884f4]/[-][white]%s[-][black:white]%s[-:-][white]%s[-]", before, cursor, after))
+		return
+	}
+
+	var hints []views.KeyHint
+	idx := a.nav.Active()
+	if hp, ok := a.views[idx].(views.KeyHintProvider); ok {
+		hints = hp.KeyHints()
+	}
+	if hints == nil {
+		return
+	}
+	if a.filterText != "" {
+		a.keyBar.SetHintsWithFilter(a.filterText, hints)
 	} else {
-		_, _ = fmt.Fprint(a.footerKeys, footerKeysBase)
+		a.keyBar.SetHints(hints)
 	}
 }
 
@@ -279,18 +277,19 @@ func (a *App) isLiveFilterable() bool {
 
 func (a *App) buildViews() []views.View {
 	aiCfg := a.cfg.AI
+	kb := a.keyBar
 	vv := []views.View{
-		views.NewStatusView(a.app, a.dlManager, aiCfg),
-		views.NewProjectsView(a.app, a.dlManager, aiCfg),
-		views.NewJobsView(a.app, a.dlManager, aiCfg),
-		views.NewLabelsView(a.app),
-		views.NewNodesView(a.app),
-		views.NewAutoholdsView(a.app),
-		views.NewSemaphoresView(a.app),
-		views.NewBuildsView(a.app, a.dlManager, aiCfg),
-		views.NewBuildsetsView(a.app, a.dlManager, aiCfg),
-		views.NewDownloadsView(a.app, a.dlManager, aiCfg),
-		views.NewBookmarksView(a.app, a.bmManager, a.dlManager, aiCfg),
+		views.NewStatusView(a.app, kb, a.dlManager, aiCfg),
+		views.NewProjectsView(a.app, kb, a.dlManager, aiCfg),
+		views.NewJobsView(a.app, kb, a.dlManager, aiCfg),
+		views.NewLabelsView(a.app, kb),
+		views.NewNodesView(a.app, kb),
+		views.NewAutoholdsView(a.app, kb),
+		views.NewSemaphoresView(a.app, kb),
+		views.NewBuildsView(a.app, kb, a.dlManager, aiCfg),
+		views.NewBuildsetsView(a.app, kb, a.dlManager, aiCfg),
+		views.NewDownloadsView(a.app, kb, a.dlManager, aiCfg),
+		views.NewBookmarksView(a.app, kb, a.bmManager, a.dlManager, aiCfg),
 	}
 	for _, v := range vv {
 		if bv, ok := v.(views.BookmarkAwareView); ok {
@@ -311,13 +310,18 @@ func (a *App) switchView(index int) {
 	a.filterText = saved.text
 	a.filterPos = saved.pos
 	a.filterOpen = false
-	a.updateFooterKeysText()
 
 	a.pages.SwitchToPage(tabNames[index])
 	if !a.viewLoaded[index] {
 		a.views[index].Load(a.client)
 		a.viewLoaded[index] = true
 	}
+	if su, ok := a.views[index].(views.StatusUpdater); ok {
+		su.UpdateStatus()
+	} else {
+		a.keyBar.ClearStatus()
+	}
+	a.renderKeyBar()
 	a.updateFooterTime()
 }
 
@@ -329,7 +333,7 @@ func (a *App) resetAllViews() {
 	}
 	a.filterText = ""
 	a.filterPos = 0
-	a.updateFooterKeysText()
+	a.renderKeyBar()
 }
 
 func (a *App) autoRefresh() {
@@ -354,8 +358,31 @@ func (a *App) autoRefresh() {
 }
 
 func (a *App) updateFooterTime() {
-	a.footerTime.Clear()
-	_, _ = fmt.Fprintf(a.footerTime, "[::d]last update: %s [-:-:-]", time.Now().Format("15:04:05"))
+	a.keyBar.SetTimestamp(time.Now().Format("15:04:05"))
+}
+
+func (a *App) updateDownloadProgress() {
+	var active, done, total int
+	for _, r := range a.dlManager.Records() {
+		if r.Status == views.DLDownloading {
+			active++
+			done += r.DoneFiles
+			total += r.TotalFiles
+		}
+	}
+	if active == 0 {
+		a.keyBar.SetDownloadProgress("")
+		return
+	}
+	pct := 0
+	if total > 0 {
+		pct = done * 100 / total
+	}
+	if active == 1 {
+		a.keyBar.SetDownloadProgress(fmt.Sprintf("[yellow::b]↓[-:-:-][::d] %d%% (%d/%d)[-:-:-]", pct, done, total))
+	} else {
+		a.keyBar.SetDownloadProgress(fmt.Sprintf("[yellow::b]↓%d[-:-:-][::d] %d%% (%d/%d)[-:-:-]", active, pct, done, total))
+	}
 }
 
 func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
@@ -369,7 +396,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 			a.app.Stop()
 		default:
 			a.quitPending = false
-			a.updateFooterKeysText()
+			a.renderKeyBar()
 		}
 		return nil
 	}
@@ -389,38 +416,38 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 			a.filterText = ""
 			a.filterPos = 0
 			a.applyFilter()
-			a.updateFooterKeysText()
+			a.renderKeyBar()
 			return nil
 		case tcell.KeyEnter:
 			a.filterOpen = false
 			a.applyFilter()
-			a.updateFooterKeysText()
+			a.renderKeyBar()
 			return nil
 		case tcell.KeyLeft:
 			if a.filterPos > 0 {
 				a.filterPos--
-				a.updateFooterKeysText()
+				a.renderKeyBar()
 			}
 			return nil
 		case tcell.KeyRight:
 			if a.filterPos < len(runes) {
 				a.filterPos++
-				a.updateFooterKeysText()
+				a.renderKeyBar()
 			}
 			return nil
 		case tcell.KeyHome:
 			a.filterPos = 0
-			a.updateFooterKeysText()
+			a.renderKeyBar()
 			return nil
 		case tcell.KeyEnd:
 			a.filterPos = len(runes)
-			a.updateFooterKeysText()
+			a.renderKeyBar()
 			return nil
 		case tcell.KeyBackspace, tcell.KeyBackspace2:
 			if a.filterPos > 0 {
 				a.filterText = string(append(runes[:a.filterPos-1], runes[a.filterPos:]...))
 				a.filterPos--
-				a.updateFooterKeysText()
+				a.renderKeyBar()
 				if a.isLiveFilterable() {
 					a.applyFilter()
 				}
@@ -429,7 +456,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		case tcell.KeyDelete:
 			if a.filterPos < len(runes) {
 				a.filterText = string(append(runes[:a.filterPos], runes[a.filterPos+1:]...))
-				a.updateFooterKeysText()
+				a.renderKeyBar()
 				if a.isLiveFilterable() {
 					a.applyFilter()
 				}
@@ -438,7 +465,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 		case tcell.KeyRune:
 			a.filterText = string(append(runes[:a.filterPos], append([]rune{event.Rune()}, runes[a.filterPos:]...)...))
 			a.filterPos++
-			a.updateFooterKeysText()
+			a.renderKeyBar()
 			if a.isLiveFilterable() {
 				a.applyFilter()
 			}
@@ -454,7 +481,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Rune() {
 	case 'q':
 		a.quitPending = true
-		a.updateFooterKeysText()
+		a.renderKeyBar()
 		return nil
 	case 'r':
 		idx := a.nav.Active()
@@ -474,7 +501,7 @@ func (a *App) globalInput(event *tcell.EventKey) *tcell.EventKey {
 	case '/':
 		a.filterOpen = true
 		a.filterPos = len([]rune(a.filterText))
-		a.updateFooterKeysText()
+		a.renderKeyBar()
 		return nil
 	}
 

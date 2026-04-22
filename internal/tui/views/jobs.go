@@ -18,6 +18,7 @@ type JobsView struct {
 	buildTable   *tview.Table
 	logView      *BuildLogView
 	pages        *tview.Pages
+	keyBar       *KeyBar
 	app          *tview.Application
 	client       *api.Client
 	jobs         []api.Job
@@ -26,11 +27,11 @@ type JobsView struct {
 
 	buildBuilds []api.Build
 	currentJob  string
-	sourceURL   string // URL to the file where the job is defined
+	sourceURL   string
 	page        string // "table", "detail", "builds", "buildlog"
 }
 
-func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *JobsView {
+func NewJobsView(app *tview.Application, keyBar *KeyBar, dlManager *DownloadManager, aiCfg config.AIConfig) *JobsView {
 	bg := ColorBg
 	navBg := ColorNavBg
 
@@ -40,14 +41,10 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 	table.SetBackgroundColor(bg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(navBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:job detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
-	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(bg)
+		AddItem(NewSpacer(), 1, 0, false)
+	tablePage.SetBackgroundColor(bg)
 
 	detailHeader := tview.NewTextView().
 		SetDynamicColors(true).
@@ -68,15 +65,10 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 	detailView.SetBackgroundColor(bg)
 	detailView.SetBorderPadding(0, 1, 2, 2)
 
-	detailKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	detailKeys.SetBackgroundColor(navBg)
-	_, _ = fmt.Fprint(detailKeys, " [#3884f4]e[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open source[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]")
-
 	detailPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(detailHeader, 1, 0, false).
 		AddItem(detailSep, 1, 0, false).
-		AddItem(detailView, 0, 1, true).
-		AddItem(detailKeys, 1, 0, false)
+		AddItem(detailView, 0, 1, true)
 	detailPage.SetBackgroundColor(bg)
 
 	buildTable := tview.NewTable().
@@ -88,20 +80,16 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 	buildHeader := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildHeader.SetBackgroundColor(navBg)
 
-	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	buildKeys.SetBackgroundColor(navBg)
-	_, _ = fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
 		AddItem(buildTable, 0, 1, true).
-		AddItem(buildKeys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	buildPage.SetBackgroundColor(bg)
 
-	logView := NewBuildLogView(app, dlManager, aiCfg)
+	logView := NewBuildLogView(app, keyBar, dlManager, aiCfg)
 
 	pages := tview.NewPages().
-		AddPage("table", tableWithKeys, true, true).
+		AddPage("table", tablePage, true, true).
 		AddPage("detail", detailPage, true, false).
 		AddPage("builds", buildPage, true, false).
 		AddPage("buildlog", logView.Root(), true, false)
@@ -118,6 +106,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 		buildTable:   buildTable,
 		logView:      logView,
 		pages:        pages,
+		keyBar:       keyBar,
 		app:          app,
 		page:         "table",
 	}
@@ -147,6 +136,8 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 		if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
 			v.pages.SwitchToPage("table")
 			v.page = "table"
+			v.keyBar.SetHints(v.KeyHints())
+			v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", v.table.GetRowCount()-1))
 			return nil
 		}
 		if event.Rune() == 'e' && v.currentJob != "" {
@@ -183,6 +174,7 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 		if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
 			v.pages.SwitchToPage("detail")
 			v.page = "detail"
+			v.keyBar.SetHints(v.KeyHints())
 			return nil
 		}
 		bi := func() int {
@@ -199,15 +191,36 @@ func NewJobsView(app *tview.Application, dlManager *DownloadManager, aiCfg confi
 	logView.SetBackHandler(func() {
 		v.pages.SwitchToPage("builds")
 		v.page = "builds"
+		v.keyBar.SetHints(v.KeyHints())
 	})
 
 	return v
 }
 
 func (v *JobsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *JobsView) Root() tview.Primitive                  { return v.root }
+func (v *JobsView) Root() tview.Primitive { return v.root }
+func (v *JobsView) UpdateStatus() {
+	if v.page == "table" {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", v.table.GetRowCount()-1))
+	} else {
+		v.keyBar.ClearStatus()
+	}
+}
 
-func (v *JobsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *JobsView) KeyHints() []KeyHint {
+	switch v.page {
+	case "detail":
+		return []KeyHint{HintRecentBuilds, HintOpenSource, HintBack}
+	case "builds":
+		return []KeyHint{HintEnter, HintOpenWeb, HintOpenChange, HintBack}
+	case "buildlog":
+		return v.logView.KeyHints()
+	default:
+		return []KeyHint{HintJobDetail, HintOpenBrowser, HintFilter}
+	}
+}
+
+func (v *JobsView) IsModal() bool          { return v.logView.IsAnalysisActive() || v.logView.IsInputActive() }
 func (v *JobsView) CanReconnect() bool     { return v.logView.CanReconnect() }
 func (v *JobsView) Reconnect()             { v.logView.Reconnect() }
 func (v *JobsView) IsLiveFilterable() bool { return true }
@@ -232,6 +245,7 @@ func (v *JobsView) Load(client *api.Client) {
 		return
 	}
 	firstLoad := len(v.jobs) == 0
+	sel, _ := v.table.GetSelection()
 
 	go func() {
 		jobs, err := client.GetJobs()
@@ -247,6 +261,14 @@ func (v *JobsView) Load(client *api.Client) {
 			if firstLoad {
 				v.table.Select(1, 0)
 				v.table.ScrollToBeginning()
+			} else {
+				if sel >= v.table.GetRowCount() {
+					sel = v.table.GetRowCount() - 1
+				}
+				if sel < 1 {
+					sel = 1
+				}
+				v.table.Select(sel, 0)
 			}
 		})
 	}()
@@ -269,8 +291,9 @@ func (v *JobsView) renderTable() {
 		row++
 	}
 	if row == 1 && v.filter != "" {
-		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetExpansion(1))
 	}
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", row-1))
 }
 
 func formatValue(val any) string {
@@ -400,6 +423,7 @@ func (v *JobsView) showJobDetail(j api.Job) {
 
 	_, _ = fmt.Fprintf(v.detailView, "\n[::d]Loading full details...[-:-:-]")
 
+	v.keyBar.ClearStatus()
 	v.pages.SwitchToPage("detail")
 	v.page = "detail"
 
@@ -588,7 +612,7 @@ func (v *JobsView) fetchParentChain(jobName, firstParent string) {
 func (v *JobsView) showJobBuilds(jobName string, header *tview.TextView) {
 	v.buildTable.Clear()
 	setTableHeader(v.buildTable, "Project", "Branch", "Pipeline", "Change", "Result", "Duration", "Start")
-	v.buildTable.SetCell(1, 0, tview.NewTableCell(" [::d]Loading...[-:-:-]").SetSelectable(false))
+	v.buildTable.SetCell(1, 0, tview.NewTableCell(" [::d]Loading...[-:-:-]").SetExpansion(1))
 
 	header.Clear()
 	_, _ = fmt.Fprintf(header, " [bold]%s[-:-:-]  [::d]recent builds[-:-:-]", jobName)
@@ -605,11 +629,11 @@ func (v *JobsView) showJobBuilds(jobName string, header *tview.TextView) {
 			v.buildTable.Clear()
 			setTableHeader(v.buildTable, "Project", "Branch", "Pipeline", "Change", "Result", "Duration", "Start")
 			if err != nil {
-				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetSelectable(false))
+				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetExpansion(1))
 				return
 			}
 			if len(builds) == 0 {
-				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [yellow]No builds found for %s[-]", jobName)).SetSelectable(false))
+				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [yellow]No builds found for %s[-]", jobName)).SetExpansion(1))
 				return
 			}
 			v.buildBuilds = builds

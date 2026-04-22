@@ -9,35 +9,43 @@ import (
 )
 
 type LabelsView struct {
-	root       *tview.Flex
-	table      *tview.Table
-	app        *tview.Application
-	client     *api.Client
+	root   *tview.Flex
+	table  *tview.Table
+	app    *tview.Application
+	keyBar *KeyBar
+	client *api.Client
 	labels     []api.Label
 	nodeCounts map[string]int
 	filter     string
 }
 
-func NewLabelsView(app *tview.Application) *LabelsView {
+func NewLabelsView(app *tview.Application, keyBar *KeyBar) *LabelsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]/[-:-:-][::d]:filter[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	root.SetBackgroundColor(ColorBg)
 
-	return &LabelsView{root: root, table: table, app: app}
+	return &LabelsView{root: root, table: table, app: app, keyBar: keyBar}
 }
 
-func (v *LabelsView) Root() tview.Primitive  { return v.root }
+func (v *LabelsView) KeyHints() []KeyHint {
+	return []KeyHint{HintFilter}
+}
+
+func (v *LabelsView) Root() tview.Primitive { return v.root }
+func (v *LabelsView) UpdateStatus() {
+	if n := v.table.GetRowCount() - 1; n > 0 {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", n))
+	} else {
+		v.keyBar.ClearStatus()
+	}
+}
 func (v *LabelsView) IsLiveFilterable() bool { return true }
 
 func (v *LabelsView) SetFilter(term string) {
@@ -49,6 +57,7 @@ func (v *LabelsView) SetFilter(term string) {
 func (v *LabelsView) Load(client *api.Client) {
 	v.client = client
 	firstLoad := len(v.labels) == 0
+	sel, _ := v.table.GetSelection()
 
 	go func() {
 		labels, err := client.GetLabels()
@@ -64,6 +73,14 @@ func (v *LabelsView) Load(client *api.Client) {
 			if firstLoad {
 				v.table.Select(1, 0)
 				v.table.ScrollToBeginning()
+			} else {
+				if sel >= v.table.GetRowCount() {
+					sel = v.table.GetRowCount() - 1
+				}
+				if sel < 1 {
+					sel = 1
+				}
+				v.table.Select(sel, 0)
 			}
 		})
 
@@ -111,6 +128,7 @@ func (v *LabelsView) renderTable() {
 		if v.filter != "" {
 			msg = fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)
 		}
-		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetExpansion(1))
 	}
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", row-1))
 }
