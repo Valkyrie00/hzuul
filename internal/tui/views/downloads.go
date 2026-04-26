@@ -23,7 +23,7 @@ type DownloadsView struct {
 	pages       *tview.Pages
 	root        *tview.Flex
 	table       *tview.Table
-	keys        *tview.TextView
+	keyBar      *KeyBar
 	app         *tview.Application
 	manager     *DownloadManager
 	analysis    *AnalysisPanel
@@ -31,19 +31,16 @@ type DownloadsView struct {
 	confirmUUID string
 }
 
-func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg config.AIConfig) *DownloadsView {
+func NewDownloadsView(app *tview.Application, keyBar *KeyBar, manager *DownloadManager, aiCfg config.AIConfig) *DownloadsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-
 	tableLayout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	tableLayout.SetBackgroundColor(ColorBg)
 
 	panel := NewAnalysisPanel(app, aiCfg)
@@ -60,17 +57,19 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg co
 		pages:    pages,
 		root:     root,
 		table:    table,
-		keys:     keys,
+		keyBar:   keyBar,
 		app:      app,
 		manager:  manager,
 		analysis: panel,
 	}
 
-	v.updateKeys()
-
+	panel.SetOnKeysChanged(func() {
+		v.updateKeys()
+	})
 	panel.SetOnExit(func() {
 		v.pages.SwitchToPage("table")
 		v.app.SetFocus(v.table)
+		v.updateKeys()
 	})
 
 	manager.SetOnChange(func() {
@@ -128,6 +127,9 @@ func NewDownloadsView(app *tview.Application, manager *DownloadManager, aiCfg co
 }
 
 func (v *DownloadsView) Root() tview.Primitive { return v.root }
+func (v *DownloadsView) UpdateStatus() {
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", len(v.manager.Records())))
+}
 
 func (v *DownloadsView) Load(_ *api.Client) {
 	v.renderTable()
@@ -140,22 +142,30 @@ func (v *DownloadsView) SetFilter(_ string) {}
 
 func (v *DownloadsView) IsModal() bool { return v.analysis.IsActive() || v.confirmKind != dlConfirmNone }
 
+func (v *DownloadsView) KeyHints() []KeyHint {
+	if v.analysis.IsActive() {
+		return v.analysis.KeyHints()
+	}
+	if v.confirmKind != dlConfirmNone {
+		return nil
+	}
+	return []KeyHint{HintOpenDir, HintCancel, HintDelete, HintAI}
+}
+
 func (v *DownloadsView) updateKeys() {
-	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " [#3884f4]o[-:-:-][::d]:open dir[-:-:-]  [#3884f4]x[-:-:-][::d]:cancel[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#e5c07b]a[-:-:-][::d]:AI analysis[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	v.keyBar.SetHints(v.KeyHints())
 }
 
 func (v *DownloadsView) askConfirm(kind dlConfirmAction, uuid, jobName string) {
 	v.confirmKind = kind
 	v.confirmUUID = uuid
 
-	v.keys.Clear()
 	label := "Delete"
 	if kind == dlConfirmCancel {
 		label = "Cancel"
 	}
-	_, _ = fmt.Fprintf(v.keys, " [red::b]%s[-:-:-] [white]%s[-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
-		label, truncate(jobName, 40))
+	v.keyBar.SetMessage(fmt.Sprintf("[red::b]%s[-:-:-] [white]%s[-][::d]?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]",
+		label, truncate(jobName, 40)))
 }
 
 func (v *DownloadsView) executeConfirm() {
@@ -238,7 +248,7 @@ func (v *DownloadsView) renderTable() {
 
 	records := v.manager.Records()
 	if len(records) == 0 {
-		v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No downloads yet. Press d in a build detail to start one.[-:-:-]").SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No downloads yet. Press d in a build detail to start one.[-:-:-]").SetExpansion(1))
 		return
 	}
 

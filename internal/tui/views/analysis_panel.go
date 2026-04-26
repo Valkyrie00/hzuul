@@ -21,7 +21,6 @@ type AnalysisPanel struct {
 	layout  *tview.Flex
 	header  *tview.TextView
 	content *tview.TextView
-	keys    *tview.TextView
 	input   *tview.InputField
 	app     *tview.Application
 
@@ -60,9 +59,6 @@ func NewAnalysisPanel(app *tview.Application, aiCfg config.AIConfig) *AnalysisPa
 	content.SetBackgroundColor(bg)
 	content.SetBorderPadding(0, 0, 2, 2)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-
 	input := tview.NewInputField()
 	input.SetBackgroundColor(ColorNavBg)
 	input.SetFieldBackgroundColor(ColorNavBg)
@@ -73,15 +69,13 @@ func NewAnalysisPanel(app *tview.Application, aiCfg config.AIConfig) *AnalysisPa
 	layout := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
 		AddItem(separator, 1, 0, false).
-		AddItem(content, 0, 1, true).
-		AddItem(keys, 1, 0, false)
+		AddItem(content, 0, 1, true)
 	layout.SetBackgroundColor(bg)
 
 	return &AnalysisPanel{
 		layout:  layout,
 		header:  header,
 		content: content,
-		keys:    keys,
 		input:   input,
 		app:     app,
 		aiCfg:   aiCfg,
@@ -120,15 +114,16 @@ func (p *AnalysisPanel) HandleKey(event *tcell.EventKey) *tcell.EventKey {
 	return nil
 }
 
-func (p *AnalysisPanel) UpdateKeys() {
-	p.keys.Clear()
-	base := " [#3884f4]esc[-:-:-][::d]:back[-:-:-]"
+func (p *AnalysisPanel) KeyHints() []KeyHint {
+	hints := []KeyHint{{"esc", "back", ""}}
 	if p.analyzer != nil && !p.streaming {
-		base += "  [#e5c07b]a[-:-:-][::d]:ask[-:-:-]"
+		hints = append(hints, KeyHint{"a", "ask", "#e5c07b"})
 	}
-	base += "  [#3884f4]↑↓[-:-:-][::d]:scroll[-:-:-]"
-	_, _ = fmt.Fprint(p.keys, base)
+	hints = append(hints, KeyHint{"↑↓", "scroll", ""})
+	return hints
+}
 
+func (p *AnalysisPanel) UpdateKeys() {
 	if p.onKeysChanged != nil {
 		p.onKeysChanged()
 	}
@@ -266,16 +261,16 @@ func (p *AnalysisPanel) showInput() {
 		}
 	})
 
-	p.layout.RemoveItem(p.keys)
 	p.layout.AddItem(p.input, 1, 0, true)
 	p.app.SetFocus(p.input)
+	p.UpdateKeys()
 }
 
 func (p *AnalysisPanel) hideInput() {
 	p.inputActive = false
 	p.layout.RemoveItem(p.input)
-	p.layout.AddItem(p.keys, 1, 0, false)
 	p.app.SetFocus(p.content)
+	p.UpdateKeys()
 }
 
 func (p *AnalysisPanel) askFollowUp(question string) {

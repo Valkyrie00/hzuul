@@ -13,7 +13,7 @@ type AutoholdsView struct {
 	root          *tview.Flex
 	table         *tview.Table
 	pages         *tview.Pages
-	keys          *tview.TextView
+	keyBar        *KeyBar
 	app           *tview.Application
 	client        *api.Client
 	holds         []api.Autohold
@@ -25,20 +25,16 @@ type AutoholdsView struct {
 
 func (v *AutoholdsView) IsModal() bool { return v.modal }
 
-func NewAutoholdsView(app *tview.Application) *AutoholdsView {
+func NewAutoholdsView(app *tview.Application, keyBar *KeyBar) *AutoholdsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	keys := tview.NewTextView().SetDynamicColors(true)
-	keys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
 	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	tablePage.SetBackgroundColor(ColorBg)
 
 	pages := tview.NewPages().
@@ -49,11 +45,11 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 	root.SetBackgroundColor(ColorBg)
 
 	v := &AutoholdsView{
-		root:  root,
-		table: table,
-		pages: pages,
-		keys:  keys,
-		app:   app,
+		root:   root,
+		table:  table,
+		pages:  pages,
+		keyBar: keyBar,
+		app:    app,
 	}
 
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -80,8 +76,22 @@ func NewAutoholdsView(app *tview.Application) *AutoholdsView {
 	return v
 }
 
-func (v *AutoholdsView) Root() tview.Primitive  { return v.root }
+func (v *AutoholdsView) Root() tview.Primitive { return v.root }
+func (v *AutoholdsView) UpdateStatus() {
+	if n := v.table.GetRowCount() - 1; n > 0 {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", n))
+	} else {
+		v.keyBar.ClearStatus()
+	}
+}
 func (v *AutoholdsView) IsLiveFilterable() bool { return true }
+
+func (v *AutoholdsView) KeyHints() []KeyHint {
+	if v.deletePending {
+		return nil
+	}
+	return []KeyHint{HintCreate, HintDelete, HintFilter}
+}
 
 func (v *AutoholdsView) SetFilter(term string) {
 	v.filter = term
@@ -92,6 +102,7 @@ func (v *AutoholdsView) SetFilter(term string) {
 func (v *AutoholdsView) Load(client *api.Client) {
 	v.client = client
 	firstLoad := len(v.holds) == 0
+	sel, _ := v.table.GetSelection()
 
 	go func() {
 		holds, err := client.GetAutoholds()
@@ -107,6 +118,14 @@ func (v *AutoholdsView) Load(client *api.Client) {
 			if firstLoad {
 				v.table.Select(1, 0)
 				v.table.ScrollToBeginning()
+			} else {
+				if sel >= v.table.GetRowCount() {
+					sel = v.table.GetRowCount() - 1
+				}
+				if sel < 1 {
+					sel = 1
+				}
+				v.table.Select(sel, 0)
 			}
 		})
 	}()
@@ -139,8 +158,9 @@ func (v *AutoholdsView) renderTable() {
 		if v.filter != "" {
 			msg = fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)
 		}
-		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(msg).SetExpansion(1))
 	}
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", row-1))
 }
 
 func (v *AutoholdsView) closeForm() {
@@ -321,29 +341,25 @@ func (v *AutoholdsView) confirmDelete() {
 	v.deleteHoldIdx = idx
 	hold := v.holds[idx]
 
-	v.keys.Clear()
-	_, _ = fmt.Fprintf(v.keys, " [red::b]Delete[-:-:-] [white]%s[-] [::d](%s)[-:-:-]  [#3884f4]y[-:-:-][::d]:confirm[-:-:-]  [#3884f4]n[-:-:-][::d]:cancel[-:-:-]",
-		truncate(hold.Job, 30), hold.ID)
+	v.keyBar.SetMessage(fmt.Sprintf("[red::b]Delete[-:-:-] [white]%s[-] [::d](%s)?[-:-:-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]",
+		truncate(hold.Job, 30), hold.ID))
 }
 
 func (v *AutoholdsView) cancelDelete() {
 	v.deletePending = false
-	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " [#3884f4]c[-:-:-][::d]:create[-:-:-]  [#3884f4]d[-:-:-][::d]:delete[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
+	v.keyBar.SetHints(v.KeyHints())
 }
 
 func (v *AutoholdsView) executeDelete() {
 	hold := v.holds[v.deleteHoldIdx]
-	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " [yellow::b]Deleting...[-:-:-]")
+	v.keyBar.SetMessage("[yellow::b]Deleting...[-:-:-]")
 
 	go func() {
 		err := v.client.DeleteAutohold(hold.ID)
 		v.app.QueueUpdateDraw(func() {
 			v.deletePending = false
 			if err != nil {
-				v.keys.Clear()
-				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				v.keyBar.SetMessage(fmt.Sprintf("[red]Error: %v[-]", err))
 				return
 			}
 			v.cancelDelete()

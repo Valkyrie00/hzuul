@@ -12,9 +12,7 @@ import (
 type BuildsView struct {
 	root            *tview.Flex
 	table           *tview.Table
-	keys            *tview.TextView
-	countLabel      *tview.TextView
-	dlLabel         *tview.TextView
+	keyBar          *KeyBar
 	logView         *BuildLogView
 	dlManager       *DownloadManager
 	pages           *tview.Pages
@@ -32,37 +30,22 @@ type BuildsView struct {
 	dequeueBuildIdx int
 }
 
-func NewBuildsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildsView {
+func NewBuildsView(app *tview.Application, keyBar *KeyBar, dlManager *DownloadManager, aiCfg config.AIConfig) *BuildsView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	countLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
-	countLabel.SetBackgroundColor(ColorBg)
-
-	dlLabel := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignRight)
-	dlLabel.SetBackgroundColor(ColorNavBg)
-
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-
-	keysRow := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(keys, 0, 1, false).
-		AddItem(dlLabel, 22, 0, false).
-		AddItem(countLabel, 20, 0, false)
-	keysRow.SetBackgroundColor(ColorNavBg)
-
-	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keysRow, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(ColorBg)
+		AddItem(NewSpacer(), 1, 0, false)
+	tablePage.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app, dlManager, aiCfg)
+	logView := NewBuildLogView(app, keyBar, dlManager, aiCfg)
 
 	pages := tview.NewPages().
-		AddPage("table", tableWithKeys, true, true).
+		AddPage("table", tablePage, true, true).
 		AddPage("detail", logView.Root(), true, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -70,20 +53,14 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 	root.SetBackgroundColor(ColorBg)
 
 	v := &BuildsView{
-		root:       root,
-		table:      table,
-		keys:       keys,
-		countLabel: countLabel,
-		dlLabel:    dlLabel,
-		logView:    logView,
-		dlManager:  dlManager,
-		pages:      pages,
-		app:        app,
+		root:      root,
+		table:     table,
+		keyBar:    keyBar,
+		logView:   logView,
+		dlManager: dlManager,
+		pages:     pages,
+		app:       app,
 	}
-
-	dlManager.SetOnChange(func() {
-		v.updateDLLabel()
-	})
 
 	table.SetSelectedFunc(func(row, _ int) {
 		if v.loading {
@@ -99,6 +76,7 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 		} else {
 			v.logView.ShowStaticLog(v.client, &build)
 		}
+		v.keyBar.ClearStatus()
 		v.pages.SwitchToPage("detail")
 		v.onDetail = true
 	})
@@ -139,42 +117,44 @@ func NewBuildsView(app *tview.Application, dlManager *DownloadManager, aiCfg con
 	logView.SetBackHandler(func() {
 		v.pages.SwitchToPage("table")
 		v.onDetail = false
+		v.updateBuildsKeys()
+		v.updateCount()
 	})
 
 	return v
 }
 
-func (v *BuildsView) updateDLLabel() {
-	v.dlLabel.Clear()
-	for _, r := range v.dlManager.Records() {
-		if r.Status == DLDownloading {
-			pct := 0
-			if r.TotalFiles > 0 {
-				pct = r.DoneFiles * 100 / r.TotalFiles
-			}
-			_, _ = fmt.Fprintf(v.dlLabel, "[yellow::b]↓[-:-:-][::d] %d%% (%d/%d)[-:-:-] ", pct, r.DoneFiles, r.TotalFiles)
-			return
-		}
+func (v *BuildsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
+func (v *BuildsView) Root() tview.Primitive { return v.root }
+func (v *BuildsView) UpdateStatus() {
+	if !v.onDetail {
+		v.updateCount()
 	}
 }
 
-func (v *BuildsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *BuildsView) Root() tview.Primitive                  { return v.root }
+func (v *BuildsView) KeyHints() []KeyHint {
+	if v.onDetail {
+		return v.logView.KeyHints()
+	}
+	if v.dequeuePending {
+		return nil
+	}
+	hints := []KeyHint{HintEnter, HintOpenWeb, HintOpenChange}
+	if v.client != nil && v.client.HasAdminToken() {
+		hints = append(hints, HintDequeue)
+	}
+	hints = append(hints, HintFilter)
+	return hints
+}
 
 func (v *BuildsView) updateBuildsKeys() {
-	v.keys.Clear()
 	if v.dequeuePending {
 		b := v.builds[v.dequeueBuildIdx]
-		_, _ = fmt.Fprintf(v.keys, " [red::b]Dequeue[-:-:-] [white]%s[-] [::d]from %s[-:-:-]  [#48c78e::b]y[-:-:-][::d]:confirm[-:-:-]  [#eb5757::b]n[-:-:-][::d]:cancel[-:-:-]",
-			truncate(b.JobName, 30), b.Pipeline)
+		v.keyBar.SetMessage(fmt.Sprintf("[red::b]Dequeue[-:-:-] [white]%s from %s?[-]  [#48c78e::b]y[-:-:-][::d]:yes[-:-:-]  [#eb5757::b]n[-:-:-][::d]:no[-:-:-]",
+			b.JobName, b.Pipeline))
 		return
 	}
-	base := " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]"
-	if v.client != nil && v.client.HasAdminToken() {
-		base += "  [#3884f4]x[-:-:-][::d]:dequeue[-:-:-]"
-	}
-	base += "  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]"
-	_, _ = fmt.Fprint(v.keys, base)
+	v.keyBar.SetHints(v.KeyHints())
 }
 
 func (v *BuildsView) confirmDequeue(buildIdx int) {
@@ -197,8 +177,7 @@ func (v *BuildsView) cancelDequeue() {
 
 func (v *BuildsView) executeDequeue() {
 	b := v.builds[v.dequeueBuildIdx]
-	v.keys.Clear()
-	_, _ = fmt.Fprint(v.keys, " [yellow::b]Dequeuing...[-:-:-]")
+	v.keyBar.SetMessage("[yellow::b]Dequeuing...[-:-:-]")
 
 	go func() {
 		req := &api.DequeueRequest{
@@ -214,8 +193,7 @@ func (v *BuildsView) executeDequeue() {
 		v.app.QueueUpdateDraw(func() {
 			v.dequeuePending = false
 			if err != nil {
-				v.keys.Clear()
-				_, _ = fmt.Fprintf(v.keys, " [red]Error: %v[-]", err)
+				v.keyBar.SetMessage(fmt.Sprintf("[red]Error: %v[-]", err))
 				return
 			}
 			v.updateBuildsKeys()
@@ -224,7 +202,7 @@ func (v *BuildsView) executeDequeue() {
 	}()
 }
 
-func (v *BuildsView) IsModal() bool      { return v.logView.IsAnalysisActive() }
+func (v *BuildsView) IsModal() bool      { return v.logView.IsAnalysisActive() || v.logView.IsInputActive() }
 func (v *BuildsView) CanReconnect() bool { return v.onDetail && v.logView.CanReconnect() }
 func (v *BuildsView) Reconnect()         { v.logView.Reconnect() }
 
@@ -240,8 +218,7 @@ func (v *BuildsView) SetFilter(term string) {
 	}
 	v.skip = 0
 	v.noMore = false
-	v.countLabel.Clear()
-	_, _ = fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
+	v.keyBar.SetStatus("[yellow::b]Searching...[-:-:-]")
 	v.searchServer()
 }
 
@@ -259,12 +236,17 @@ func (v *BuildsView) Load(client *api.Client) {
 	if v.onDetail {
 		return
 	}
+	isRefresh := len(v.builds) > 0
 	if v.filter == "" {
 		v.curFilter = api.BuildFilter{Limit: defaultPageSize}
 	}
-	v.skip = 0
-	v.noMore = false
-	v.searchServer()
+	if isRefresh {
+		v.refreshInPlace()
+	} else {
+		v.skip = 0
+		v.noMore = false
+		v.searchServer()
+	}
 }
 
 func (v *BuildsView) searchServer() {
@@ -274,7 +256,6 @@ func (v *BuildsView) searchServer() {
 	v.loading = true
 	f := v.curFilter
 	f.Skip = 0
-	firstLoad := len(v.builds) == 0
 
 	go func() {
 		builds, err := v.client.GetBuilds(&f)
@@ -291,10 +272,53 @@ func (v *BuildsView) searchServer() {
 			v.noMore = len(builds) < defaultPageSize
 			v.renderRows(0)
 			v.updateCount()
-			if firstLoad {
-				v.table.Select(1, 0)
-				v.table.ScrollToBeginning()
+			if len(builds) == 0 {
+				v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No results[-:-:-]").SetExpansion(1))
 			}
+			v.table.Select(1, 0)
+			v.table.ScrollToBeginning()
+		})
+	}()
+}
+
+func (v *BuildsView) refreshInPlace() {
+	if v.loading || v.client == nil {
+		return
+	}
+	v.loading = true
+	f := v.curFilter
+	f.Skip = 0
+	if v.skip > f.Limit {
+		f.Limit = v.skip
+	}
+	sel, _ := v.table.GetSelection()
+
+	go func() {
+		builds, err := v.client.GetBuilds(&f)
+		v.app.QueueUpdateDraw(func() {
+			v.loading = false
+			if err != nil {
+				return
+			}
+			v.table.Clear()
+			setBuildHeader(v.table)
+			v.builds = builds
+			v.skip = len(builds)
+			v.noMore = len(builds) < f.Limit
+			v.renderRows(0)
+			v.updateCount()
+			if len(builds) == 0 {
+				v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No results[-:-:-]").SetExpansion(1))
+				v.table.Select(1, 0)
+				return
+			}
+			if sel >= v.table.GetRowCount() {
+				sel = v.table.GetRowCount() - 1
+			}
+			if sel < 1 {
+				sel = 1
+			}
+			v.table.Select(sel, 0)
 		})
 	}()
 }
@@ -306,8 +330,7 @@ func (v *BuildsView) searchByUUID(uuid string) {
 	v.loading = true
 	v.skip = 0
 	v.noMore = true
-	v.countLabel.Clear()
-	_, _ = fmt.Fprint(v.countLabel, "[yellow::b]Searching...[-:-:-] ")
+	v.keyBar.SetStatus("[yellow::b]Searching...[-:-:-]")
 
 	go func() {
 		build, err := v.client.GetBuild(uuid)
@@ -316,8 +339,8 @@ func (v *BuildsView) searchByUUID(uuid string) {
 			v.table.Clear()
 			setBuildHeader(v.table)
 			if err != nil {
-				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetSelectable(false))
-				v.countLabel.Clear()
+				v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetExpansion(1))
+				v.keyBar.ClearStatus()
 				return
 			}
 			v.builds = []api.Build{*build}
@@ -331,12 +354,11 @@ func (v *BuildsView) searchByUUID(uuid string) {
 }
 
 func (v *BuildsView) updateCount() {
-	v.countLabel.Clear()
 	suffix := ""
 	if !v.noMore {
 		suffix = "+"
 	}
-	_, _ = fmt.Fprintf(v.countLabel, "[::d]%d%s items [-:-:-]", len(v.builds), suffix)
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d%s items[-:-:-]", len(v.builds), suffix))
 }
 
 func (v *BuildsView) loadMore() {
@@ -398,6 +420,6 @@ func (v *BuildsView) renderRows(fromIdx int) {
 		row++
 	}
 	if len(v.builds) == 0 && v.filter != "" {
-		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No results for '%s'[-]", v.filter)).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No results for '%s'[-]", v.filter)).SetExpansion(1))
 	}
 }

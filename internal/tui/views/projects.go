@@ -15,6 +15,7 @@ type ProjectsView struct {
 	buildTable *tview.Table
 	logView    *BuildLogView
 	pages      *tview.Pages
+	keyBar     *KeyBar
 	app        *tview.Application
 	client     *api.Client
 	projects   []api.Project
@@ -26,7 +27,7 @@ type ProjectsView struct {
 	page         string // "table", "builds", "detail"
 }
 
-func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg config.AIConfig) *ProjectsView {
+func NewProjectsView(app *tview.Application, keyBar *KeyBar, dlManager *DownloadManager, aiCfg config.AIConfig) *ProjectsView {
 	bg := ColorBg
 	navBg := ColorNavBg
 
@@ -37,14 +38,10 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	table.SetSelectedStyle(SelectedStyle)
 	table.SetBorder(false)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(navBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:recent builds[-:-:-]  [#3884f4]o[-:-:-][::d]:open in browser[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
-	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(bg)
+		AddItem(NewSpacer(), 1, 0, false)
+	tablePage.SetBackgroundColor(bg)
 
 	buildTable := tview.NewTable().
 		SetSelectable(true, false).
@@ -55,20 +52,16 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	buildHeader := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
 	buildHeader.SetBackgroundColor(navBg)
 
-	buildKeys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	buildKeys.SetBackgroundColor(navBg)
-	_, _ = fmt.Fprint(buildKeys, " [#3884f4]enter[-:-:-][::d]:build detail[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]esc[-:-:-][::d]:back[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
 	buildPage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(buildHeader, 1, 0, false).
 		AddItem(buildTable, 0, 1, true).
-		AddItem(buildKeys, 1, 0, false)
+		AddItem(NewSpacer(), 1, 0, false)
 	buildPage.SetBackgroundColor(bg)
 
-	logView := NewBuildLogView(app, dlManager, aiCfg)
+	logView := NewBuildLogView(app, keyBar, dlManager, aiCfg)
 
 	pages := tview.NewPages().
-		AddPage("table", tableWithKeys, true, true).
+		AddPage("table", tablePage, true, true).
 		AddPage("builds", buildPage, true, false).
 		AddPage("detail", logView.Root(), true, false)
 
@@ -82,6 +75,7 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		buildTable: buildTable,
 		logView:    logView,
 		pages:      pages,
+		keyBar:     keyBar,
 		app:        app,
 		page:       "table",
 	}
@@ -127,6 +121,8 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 		if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
 			v.pages.SwitchToPage("table")
 			v.page = "table"
+			v.keyBar.SetHints(v.KeyHints())
+			v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", v.table.GetRowCount()-1))
 			return nil
 		}
 		bi := func() int {
@@ -143,15 +139,34 @@ func NewProjectsView(app *tview.Application, dlManager *DownloadManager, aiCfg c
 	logView.SetBackHandler(func() {
 		v.pages.SwitchToPage("builds")
 		v.page = "builds"
+		v.keyBar.SetHints(v.KeyHints())
 	})
 
 	return v
 }
 
 func (v *ProjectsView) SetBookmarkManager(bm *BookmarkManager) { v.logView.SetBookmarkManager(bm) }
-func (v *ProjectsView) Root() tview.Primitive                  { return v.root }
+func (v *ProjectsView) Root() tview.Primitive { return v.root }
+func (v *ProjectsView) UpdateStatus() {
+	if v.page == "table" {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", v.table.GetRowCount()-1))
+	} else {
+		v.keyBar.ClearStatus()
+	}
+}
 
-func (v *ProjectsView) IsModal() bool          { return v.logView.IsAnalysisActive() }
+func (v *ProjectsView) KeyHints() []KeyHint {
+	switch v.page {
+	case "builds":
+		return []KeyHint{HintEnter, HintOpenWeb, HintOpenChange, HintBack}
+	case "detail":
+		return v.logView.KeyHints()
+	default:
+		return []KeyHint{HintRecent, HintOpenBrowser, HintFilter}
+	}
+}
+
+func (v *ProjectsView) IsModal() bool          { return v.logView.IsAnalysisActive() || v.logView.IsInputActive() }
 func (v *ProjectsView) CanReconnect() bool     { return v.logView.CanReconnect() }
 func (v *ProjectsView) Reconnect()             { v.logView.Reconnect() }
 func (v *ProjectsView) IsLiveFilterable() bool { return true }
@@ -176,6 +191,7 @@ func (v *ProjectsView) Load(client *api.Client) {
 		return
 	}
 	firstLoad := len(v.projects) == 0
+	sel, _ := v.table.GetSelection()
 
 	go func() {
 		projects, err := client.GetProjects()
@@ -191,6 +207,14 @@ func (v *ProjectsView) Load(client *api.Client) {
 			if firstLoad {
 				v.table.Select(1, 0)
 				v.table.ScrollToBeginning()
+			} else {
+				if sel >= v.table.GetRowCount() {
+					sel = v.table.GetRowCount() - 1
+				}
+				if sel < 1 {
+					sel = 1
+				}
+				v.table.Select(sel, 0)
 			}
 		})
 	}()
@@ -213,19 +237,21 @@ func (v *ProjectsView) renderTable() {
 		row++
 	}
 	if row == 1 && v.filter != "" {
-		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [::d]No matches for '%s'[-]", v.filter)).SetExpansion(1))
 	}
+	v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", row-1))
 }
 
 func (v *ProjectsView) showProjectBuilds(p api.Project, header *tview.TextView) {
 	v.buildProject = p.Name
 	v.buildTable.Clear()
 	setTableHeader(v.buildTable, "Job", "Branch", "Pipeline", "Change", "Result", "Duration", "Start")
-	v.buildTable.SetCell(1, 0, tview.NewTableCell(" [::d]Loading...[-:-:-]").SetSelectable(false))
+	v.buildTable.SetCell(1, 0, tview.NewTableCell(" [::d]Loading...[-:-:-]").SetExpansion(1))
 
 	header.Clear()
 	_, _ = fmt.Fprintf(header, " [bold]%s[-:-:-]  [::d]recent builds[-:-:-]", p.Name)
 
+	v.keyBar.ClearStatus()
 	v.pages.SwitchToPage("builds")
 	v.page = "builds"
 
@@ -238,11 +264,11 @@ func (v *ProjectsView) showProjectBuilds(p api.Project, header *tview.TextView) 
 			v.buildTable.Clear()
 			setTableHeader(v.buildTable, "Job", "Branch", "Pipeline", "Change", "Result", "Duration", "Start")
 			if err != nil {
-				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetSelectable(false))
+				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [red]Error: %v[-]", err)).SetExpansion(1))
 				return
 			}
 			if len(builds) == 0 {
-				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [yellow]No builds found for %s[-]", p.Name)).SetSelectable(false))
+				v.buildTable.SetCell(1, 0, tview.NewTableCell(fmt.Sprintf(" [yellow]No builds found for %s[-]", p.Name)).SetExpansion(1))
 				return
 			}
 			v.buildBuilds = builds

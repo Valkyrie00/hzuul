@@ -15,31 +15,28 @@ type BookmarksView struct {
 	logView  *BuildLogView
 	pages    *tview.Pages
 	app      *tview.Application
+	keyBar   *KeyBar
 	manager  *BookmarkManager
 	client   *api.Client
 	onDetail bool
 }
 
-func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManager *DownloadManager, aiCfg config.AIConfig) *BookmarksView {
+func NewBookmarksView(app *tview.Application, keyBar *KeyBar, manager *BookmarkManager, dlManager *DownloadManager, aiCfg config.AIConfig) *BookmarksView {
 	table := tview.NewTable().
 		SetSelectable(true, false).
 		SetFixed(1, 0)
 	table.SetBackgroundColor(ColorBg)
 	table.SetSelectedStyle(SelectedStyle)
 
-	keys := tview.NewTextView().SetDynamicColors(true).SetTextAlign(tview.AlignLeft)
-	keys.SetBackgroundColor(ColorNavBg)
-	_, _ = fmt.Fprint(keys, " [#3884f4]enter[-:-:-][::d]:open build[-:-:-]  [#3884f4]c[-:-:-][::d]:open change[-:-:-]  [#3884f4]d[-:-:-][::d]:remove[-:-:-]  [#3884f4]o[-:-:-][::d]:open web[-:-:-]  [#3884f4]↑↓[-:-:-][::d]:navigate[-:-:-]")
-
-	tableWithKeys := tview.NewFlex().SetDirection(tview.FlexRow).
+	tablePage := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(table, 0, 1, true).
-		AddItem(keys, 1, 0, false)
-	tableWithKeys.SetBackgroundColor(ColorBg)
+		AddItem(NewSpacer(), 1, 0, false)
+	tablePage.SetBackgroundColor(ColorBg)
 
-	logView := NewBuildLogView(app, dlManager, aiCfg)
+	logView := NewBuildLogView(app, keyBar, dlManager, aiCfg)
 
 	pages := tview.NewPages().
-		AddPage("table", tableWithKeys, true, true).
+		AddPage("table", tablePage, true, true).
 		AddPage("detail", logView.Root(), true, false)
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -52,6 +49,7 @@ func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManage
 		logView: logView,
 		pages:   pages,
 		app:     app,
+		keyBar:  keyBar,
 		manager: manager,
 	}
 
@@ -67,6 +65,7 @@ func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManage
 			return
 		}
 		fallback := v.recordToBuild(rec)
+		v.keyBar.ClearStatus()
 		if fallback.Result == "" && fallback.UUID != "" {
 			v.logView.StreamBuild(v.client, fallback)
 			v.pages.SwitchToPage("detail")
@@ -121,6 +120,11 @@ func NewBookmarksView(app *tview.Application, manager *BookmarkManager, dlManage
 }
 
 func (v *BookmarksView) Root() tview.Primitive { return v.root }
+func (v *BookmarksView) UpdateStatus() {
+	if !v.onDetail {
+		v.keyBar.SetStatus(fmt.Sprintf("[::d]%d items[-:-:-]", len(v.filteredRecords())))
+	}
+}
 
 func (v *BookmarksView) Load(client *api.Client) {
 	v.client = client
@@ -154,7 +158,14 @@ func (v *BookmarksView) refreshFromAPI(client *api.Client) {
 	}
 }
 
-func (v *BookmarksView) IsModal() bool      { return v.logView.IsAnalysisActive() }
+func (v *BookmarksView) KeyHints() []KeyHint {
+	if v.onDetail {
+		return v.logView.KeyHints()
+	}
+	return []KeyHint{HintOpenBuild, HintOpenChange, HintRemove, HintOpenWeb}
+}
+
+func (v *BookmarksView) IsModal() bool      { return v.logView.IsAnalysisActive() || v.logView.IsInputActive() }
 func (v *BookmarksView) CanReconnect() bool { return v.logView.CanReconnect() }
 func (v *BookmarksView) Reconnect()         { v.logView.Reconnect() }
 
@@ -204,7 +215,7 @@ func (v *BookmarksView) renderTable() {
 
 	records := v.filteredRecords()
 	if len(records) == 0 {
-		v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No bookmarks yet. Press b in a build detail to save one.[-:-:-]").SetSelectable(false))
+		v.table.SetCell(1, 0, tview.NewTableCell(" [::d]No bookmarks yet. Press b in a build detail to save one.[-:-:-]").SetExpansion(1))
 		return
 	}
 
