@@ -43,6 +43,7 @@ type App struct {
 	refreshInterval time.Duration
 	savedFilters    map[int]filterState
 	viewLoaded      map[int]bool
+	aiStatus        *ai.AIStatus
 }
 
 func New(cfg *config.Config, version string) (*App, error) {
@@ -126,8 +127,18 @@ func New(cfg *config.Config, version string) (*App, error) {
 
 	go a.initClient(ctx, loadingText)
 	go a.checkForUpdates()
+	go a.resolveAIStatus()
 
 	return a, nil
+}
+
+func (a *App) resolveAIStatus() {
+	status := ai.GetAIStatus(a.cfg.AI)
+	a.app.QueueUpdateDraw(func() {
+		a.aiStatus = &status
+		ctx, _ := a.cfg.Active()
+		a.writeHeader(a.header, ctx)
+	})
 }
 
 func (a *App) initClient(ctx *config.Context, loadingText *tview.TextView) {
@@ -165,15 +176,17 @@ func (a *App) Run() error {
 }
 
 func (a *App) aiLabel() string {
-	label := ai.ProviderLabel(a.cfg.AI)
-	if label == "" {
+	if a.aiStatus == nil {
+		return "[::d]│[-:-:-] [::d]ai:[-:-:-] [::d]…[-:-:-]"
+	}
+	if a.aiStatus.Label == "" {
 		return "[::d]│[-:-:-] [::d]ai:[-:-:-] [red]not configured[-:-:-]"
 	}
 	color := "green"
-	if !ai.HasAnalyzer(a.cfg.AI) {
+	if !a.aiStatus.Available {
 		color = "yellow"
 	}
-	return fmt.Sprintf("[::d]│[-:-:-] [::d]ai:[-:-:-] [%s]%s[-:-:-]", color, label)
+	return fmt.Sprintf("[::d]│[-:-:-] [::d]ai:[-:-:-] [%s]%s[-:-:-]", color, a.aiStatus.Label)
 }
 
 func (a *App) buildHeader(ctx *config.Context) *tview.TextView {

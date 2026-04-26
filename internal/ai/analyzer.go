@@ -26,6 +26,33 @@ func NewAnalyzer(cfg config.AIConfig) *Analyzer {
 	return &Analyzer{provider: p}
 }
 
+// AIStatus holds the resolved label and availability of the AI provider.
+type AIStatus struct {
+	Label     string
+	Available bool
+}
+
+// GetAIStatus resolves the AI provider once and returns both the display
+// label and whether a working analyzer is available. This avoids calling
+// resolveProvider (and potentially gcloud) multiple times.
+func GetAIStatus(cfg config.AIConfig) AIStatus {
+	p := resolveProvider(cfg)
+	if p != nil {
+		return AIStatus{Label: p.Name(), Available: true}
+	}
+	switch strings.ToLower(cfg.Provider) {
+	case "vertex":
+		if cfg.VertexProjectID != "" {
+			return AIStatus{Label: "Vertex (gcloud ADC?)", Available: false}
+		}
+	case "gemini-vertex":
+		if cfg.VertexProjectID != "" {
+			return AIStatus{Label: "Gemini Vertex (gcloud ADC?)", Available: false}
+		}
+	}
+	return AIStatus{}
+}
+
 // HasAnalyzer checks if at least one provider can be configured.
 func HasAnalyzer(cfg config.AIConfig) bool {
 	return resolveProvider(cfg) != nil
@@ -37,7 +64,6 @@ func ProviderLabel(cfg config.AIConfig) string {
 	if p != nil {
 		return p.Name()
 	}
-	// Config points at Vertex but gcloud ADC failed — YAML was still applied.
 	switch strings.ToLower(cfg.Provider) {
 	case "vertex":
 		if cfg.VertexProjectID != "" {
