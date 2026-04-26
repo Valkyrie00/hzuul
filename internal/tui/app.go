@@ -200,11 +200,10 @@ func (a *App) buildHeader(ctx *config.Context) *tview.TextView {
 
 func (a *App) writeHeader(tv *tview.TextView, ctx *config.Context) {
 	tv.Clear()
-	versionBadge := fmt.Sprintf("[::d]%s", strings.ToUpper(a.version))
+	versionBadge := fmt.Sprintf("[::d]%s[-:-:-]", strings.ToUpper(a.version))
 	if a.latestVersion != "" {
-		versionBadge += fmt.Sprintf(" [yellow](%s ![-:-:-][yellow])[-:-:-]", a.latestVersion)
+		versionBadge += fmt.Sprintf(" [yellow](Update available: %s)[-:-:-]", a.latestVersion)
 	}
-	versionBadge += "[-:-:-]"
 	_, _ = fmt.Fprintf(tv, " [#3884F4::b]HZUUL[-:-:-] %s [::d]│[-:-:-] %s [::d]│[-:-:-] [::d]tenant:[-:-:-] [#e5c07b::b]%s[-:-:-] [::d]│[-:-:-] [::d]ctx:[-:-:-] [green]%s[-:-:-] %s",
 		versionBadge, ctx.URL, ctx.Tenant, a.cfg.CurrentContext, a.aiLabel())
 }
