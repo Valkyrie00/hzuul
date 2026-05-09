@@ -85,9 +85,11 @@ func New(cfg *config.Config, version string) (*App, error) {
 	a.views = a.buildViews()
 
 	a.bmManager.SetOnChange(func() {
-		if su, ok := a.views[a.nav.Active()].(views.StatusUpdater); ok {
-			su.UpdateStatus()
-		}
+		a.app.QueueUpdateDraw(func() {
+			if su, ok := a.views[a.nav.Active()].(views.StatusUpdater); ok {
+				su.UpdateStatus()
+			}
+		})
 	})
 
 	a.dlManager.SetOnChange(func() {

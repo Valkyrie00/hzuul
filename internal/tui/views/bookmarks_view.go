@@ -54,9 +54,11 @@ func NewBookmarksView(app *tview.Application, keyBar *KeyBar, manager *BookmarkM
 	}
 
 	manager.SetOnChange(func() {
-		if !v.onDetail {
-			v.renderTable()
-		}
+		app.QueueUpdateDraw(func() {
+			if !v.onDetail {
+				v.renderTable()
+			}
+		})
 	})
 
 	table.SetSelectedFunc(func(row, _ int) {
