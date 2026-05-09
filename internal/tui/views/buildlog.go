@@ -45,6 +45,7 @@ type BuildLogView struct {
 
 	jobOutput   []api.PlaybookOutput
 	failedTasks []api.FailedTask
+	lineCount   int
 
 	pages       *tview.Pages
 	buildLayout *tview.Flex
@@ -145,8 +146,7 @@ func NewBuildLogView(app *tview.Application, keyBar *KeyBar, dlManager *Download
 			case tcell.KeyDown, tcell.KeyPgDn:
 				row, _ := v.textView.GetScrollOffset()
 				_, _, _, height := v.textView.GetInnerRect()
-				content := strings.Count(v.textView.GetText(true), "\n") + 1
-				if row+height >= content-1 {
+				if row+height >= v.lineCount-1 {
 					if !v.autoScroll {
 						v.autoScroll = true
 						v.updateKeys()
@@ -524,8 +524,10 @@ func (v *BuildLogView) StreamBuild(client *api.Client, build *api.Build) {
 
 	v.streamDead = false
 	v.autoScroll = true
+	v.lineCount = 0
 	v.textView.Clear()
 	_, _ = fmt.Fprintln(v.textView, "[::d]Connecting to log stream...[-:-:-]")
+	v.lineCount = 2
 
 	v.stopCh = make(chan struct{})
 
@@ -569,6 +571,7 @@ func (v *BuildLogView) streamLoop(client *api.Client, build *api.Build) {
 		if attempt == 0 {
 			v.app.QueueUpdateDraw(func() {
 				v.textView.Clear()
+				v.lineCount = 0
 			})
 		}
 
@@ -626,9 +629,11 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 			buf.Reset()
 			bufMu.Unlock()
 			if remaining != "" {
+				newlines := strings.Count(remaining, "\n")
 				colored := colorizeLogChunk(remaining)
 				v.app.QueueUpdateDraw(func() {
 					_, _ = fmt.Fprint(v.textView, colored)
+					v.lineCount += newlines
 					if v.autoScroll {
 						v.textView.ScrollToEnd()
 					}
@@ -641,9 +646,11 @@ func (v *BuildLogView) readStream(streamer *api.LogStreamer) bool {
 			buf.Reset()
 			bufMu.Unlock()
 			if chunk != "" {
+				newlines := strings.Count(chunk, "\n")
 				colored := colorizeLogChunk(chunk)
 				v.app.QueueUpdateDraw(func() {
 					_, _ = fmt.Fprint(v.textView, colored)
+					v.lineCount += newlines
 					if v.autoScroll {
 						v.textView.ScrollToEnd()
 					}
