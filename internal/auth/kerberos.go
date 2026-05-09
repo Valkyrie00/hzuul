@@ -32,6 +32,8 @@ type Kerberos struct {
 	accessToken    string
 	hasOIDCSession bool
 	onProgress     func(string)
+	targetURL      string
+	httpClient     *http.Client
 }
 
 // NewKerberos bootstraps a Kerberos session by running curl --negotiate against
@@ -54,7 +56,7 @@ func NewKerberos(targetURL string, verifySSL bool, caCert string, onProgress fun
 	}
 
 	jar, _ := cookiejar.New(nil)
-	k := &Kerberos{jar: jar, verifySSL: verifySSL, caCert: caCert, onProgress: progress}
+	k := &Kerberos{jar: jar, verifySSL: verifySSL, caCert: caCert, onProgress: progress, targetURL: targetURL}
 
 	progress("Authenticating via SPNEGO...")
 	if err := k.negotiate(targetURL); err != nil {
@@ -91,14 +93,61 @@ func (k *Kerberos) HTTPClient(_ *http.Transport) HTTPDoer {
 			tlsCfg.RootCAs = pool
 		}
 	}
-	return &http.Client{
+	k.httpClient = &http.Client{
 		Jar:       k.jar,
 		Timeout:   30 * time.Second,
 		Transport: &http.Transport{TLSClientConfig: tlsCfg},
 	}
+	return k.httpClient
 }
 
 func (k *Kerberos) Validate() error {
+	return nil
+}
+
+// Refresh re-authenticates the Kerberos session from scratch, replacing
+// cookies and OIDC tokens. This is called automatically when a 401 is
+// received from the Zuul API, indicating the session has expired.
+func (k *Kerberos) Refresh() error {
+	progress := func(msg string) {
+		if k.onProgress != nil {
+			k.onProgress(msg)
+		}
+	}
+
+	progress("Session expired — re-authenticating...")
+
+	if err := checkKerberosTicket(); err != nil {
+		return fmt.Errorf("refresh: %w", err)
+	}
+
+	newJar, _ := cookiejar.New(nil)
+	k.jar = newJar
+	k.accessToken = ""
+	k.hasOIDCSession = false
+	if k.httpClient != nil {
+		k.httpClient.Jar = newJar
+	}
+
+	progress("Re-authenticating via SPNEGO...")
+	if err := k.negotiate(k.targetURL); err != nil {
+		return fmt.Errorf("refresh negotiate: %w", err)
+	}
+
+	progress("Refreshing admin session...")
+	if err := k.acquireOIDCSession(k.targetURL); err != nil {
+		slog.Debug("refresh: OIDC session not available", "error", err)
+	}
+
+	progress("Refreshing access token...")
+	if token, err := k.acquireOIDCToken(k.targetURL); err != nil {
+		slog.Debug("refresh: could not acquire OIDC token", "error", err)
+	} else {
+		k.accessToken = token
+		slog.Debug("refresh: acquired fresh OIDC bearer token")
+	}
+
+	progress("Session refreshed")
 	return nil
 }
 

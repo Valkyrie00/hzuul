@@ -4,22 +4,31 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Valkyrie00/hzuul/internal/auth"
 	"github.com/Valkyrie00/hzuul/internal/config"
 )
 
+// ErrUnauthorized is returned when a 401 persists after a re-auth attempt
+// (or when the provider does not support refreshing).
+var ErrUnauthorized = errors.New("session expired — please restart hzuul or run 'kinit'")
+
 type Client struct {
 	doer         auth.HTTPDoer
 	authProvider auth.Provider
 	baseURL      string
 	tenant       string
+	onProgress   func(string)
+	refreshMu    sync.Mutex
 }
 
 func NewClient(ctx *config.Context, onProgress func(string)) (*Client, error) {
@@ -61,6 +70,7 @@ func NewClient(ctx *config.Context, onProgress func(string)) (*Client, error) {
 		authProvider: authProvider,
 		baseURL:      strings.TrimRight(ctx.URL, "/"),
 		tenant:       ctx.Tenant,
+		onProgress:   onProgress,
 	}, nil
 }
 
@@ -111,6 +121,25 @@ func (c *Client) get(path string, params url.Values) (*http.Response, error) {
 		return nil, fmt.Errorf("GET %s: %w", path, err)
 	}
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		_, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if c.tryRefreshAuth() {
+			req2, _ := http.NewRequest("GET", u, nil)
+			resp, err = c.doer.Do(req2)
+			if err != nil {
+				return nil, fmt.Errorf("GET %s: %w", path, err)
+			}
+			if resp.StatusCode == http.StatusUnauthorized {
+				_, _ = io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
+				return nil, fmt.Errorf("GET %s: %w", path, ErrUnauthorized)
+			}
+		} else {
+			return nil, fmt.Errorf("GET %s: %w", path, ErrUnauthorized)
+		}
+	}
+
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
@@ -130,8 +159,8 @@ func (c *Client) getJSON(path string, params url.Values, target any) error {
 	return json.NewDecoder(resp.Body).Decode(target)
 }
 
-func (c *Client) postJSON(path string, body any) error {
-	data, err := json.Marshal(body)
+func (c *Client) postJSON(path string, payload any) error {
+	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshaling request: %w", err)
 	}
@@ -149,6 +178,25 @@ func (c *Client) postJSON(path string, body any) error {
 		return fmt.Errorf("POST %s: %w", path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		if c.tryRefreshAuth() {
+			req2, _ := http.NewRequest("POST", u, bytes.NewReader(data))
+			req2.Header.Set("Content-Type", "application/json")
+			c.setBearerToken(req2)
+			resp2, err2 := c.doer.Do(req2)
+			if err2 != nil {
+				return fmt.Errorf("POST %s: %w", path, err2)
+			}
+			defer func() { _ = resp2.Body.Close() }()
+			if resp2.StatusCode == http.StatusUnauthorized {
+				return fmt.Errorf("POST %s: %w", path, ErrUnauthorized)
+			}
+			resp = resp2
+		} else {
+			return fmt.Errorf("POST %s: %w", path, ErrUnauthorized)
+		}
+	}
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -175,10 +223,60 @@ func (c *Client) delete(path string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		if c.tryRefreshAuth() {
+			req2, _ := http.NewRequest("DELETE", u, nil)
+			c.setBearerToken(req2)
+			resp2, err2 := c.doer.Do(req2)
+			if err2 != nil {
+				return fmt.Errorf("DELETE %s: %w", path, err2)
+			}
+			defer func() { _ = resp2.Body.Close() }()
+			if resp2.StatusCode == http.StatusUnauthorized {
+				return fmt.Errorf("DELETE %s: %w", path, ErrUnauthorized)
+			}
+			resp = resp2
+		} else {
+			return fmt.Errorf("DELETE %s: %w", path, ErrUnauthorized)
+		}
+	}
+
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("DELETE %s: %s", path, resp.Status)
 	}
 	return nil
+}
+
+// tryRefreshAuth attempts to re-authenticate when a 401 is received.
+// Returns true if the refresh succeeded and the caller should retry.
+// Uses a mutex so concurrent goroutines don't all trigger a refresh.
+func (c *Client) tryRefreshAuth() bool {
+	r, ok := c.authProvider.(auth.Refreshable)
+	if !ok {
+		return false
+	}
+
+	c.refreshMu.Lock()
+	defer c.refreshMu.Unlock()
+
+	slog.Info("received 401 — attempting to refresh authentication")
+	if c.onProgress != nil {
+		c.onProgress("Session expired — re-authenticating...")
+	}
+
+	if err := r.Refresh(); err != nil {
+		slog.Warn("auth refresh failed", "error", err)
+		if c.onProgress != nil {
+			c.onProgress("")
+		}
+		return false
+	}
+
+	slog.Info("auth refresh succeeded")
+	if c.onProgress != nil {
+		c.onProgress("")
+	}
+	return true
 }
 
 func (c *Client) setBearerToken(req *http.Request) {
@@ -212,6 +310,25 @@ func (c *Client) RawGet(rawURL string) (*http.Response, error) {
 	resp, err := c.doer.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("GET %s: %w", rawURL, err)
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		_, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if c.tryRefreshAuth() {
+			req2, _ := http.NewRequest("GET", rawURL, nil)
+			resp, err = c.doer.Do(req2)
+			if err != nil {
+				return nil, fmt.Errorf("GET %s: %w", rawURL, err)
+			}
+			if resp.StatusCode == http.StatusUnauthorized {
+				_, _ = io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
+				return nil, fmt.Errorf("GET %s: %w", rawURL, ErrUnauthorized)
+			}
+		} else {
+			return nil, fmt.Errorf("GET %s: %w", rawURL, ErrUnauthorized)
+		}
 	}
 
 	if resp.StatusCode >= 400 {

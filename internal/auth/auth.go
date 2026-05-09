@@ -25,6 +25,12 @@ type SessionProvider interface {
 	HasOIDCSession() bool
 }
 
+// Refreshable can be implemented by auth providers that support
+// re-authenticating after a session/token expires (e.g. Kerberos SPNEGO).
+type Refreshable interface {
+	Refresh() error
+}
+
 // HTTPDoer is the interface for making HTTP requests (both http.Client and spnego.Client implement this).
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)

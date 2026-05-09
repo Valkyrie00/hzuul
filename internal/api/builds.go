@@ -211,6 +211,25 @@ func (c *Client) GetJobOutput(logURL string) ([]PlaybookOutput, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching job-output.json: %w", err)
 	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		_, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if c.tryRefreshAuth() {
+			req2, _ := http.NewRequest("GET", u, nil)
+			resp, err = c.doer.Do(req2)
+			if err != nil {
+				return nil, fmt.Errorf("fetching job-output.json: %w", err)
+			}
+			if resp.StatusCode == http.StatusUnauthorized {
+				_, _ = io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
+				return nil, fmt.Errorf("job-output.json: %w", ErrUnauthorized)
+			}
+		} else {
+			return nil, fmt.Errorf("job-output.json: %w", ErrUnauthorized)
+		}
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
